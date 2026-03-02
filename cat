@@ -1,0 +1,7 @@
+      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND
+     1811       1    1811       2568  cons0    1062083   Feb 13 /usr/bin/bash
+     2620    1811    2620      12664  cons0    1062083 15:19:11 /usr/bin/sh
+     2332       1    2332      11280  cons1    1062083 12:30:59 /usr/bin/bash
+     2624       1    2624      13536  cons2    1062083 15:25:28 /usr/bin/bash
+     2818    2624    2818      12528  cons2    1062083 18:33:37 /usr/bin/PS
+     2623    2620    2620      12588  cons0    1062083 15:19:11 /c/Program Files/Docker/Docker/resources/bin/docker

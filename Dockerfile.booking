@@ -1,0 +1,3 @@
+FROM mosipid/pre-registration-booking-service:1.2.0
+COPY jars/kernel-auth-adapter-1.2.0.jar /home/mosip/additional_jars/kernel-auth-adapter.jar
+COPY jars/kernel-ref-idobjectvalidator-1.2.0.jar /home/mosip/additional_jars/kernel-ref-idobjectvalidator.jar

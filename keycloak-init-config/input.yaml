@@ -1,0 +1,137 @@
+mosip:  # realm
+  roles:  
+   - ABIS_PARTNER
+   - AUTH
+   - AUTH_PARTNER
+   - BIOMETRIC_READ
+   - CREATE_SHARE
+   - CREDENTIAL_ISSUANCE
+   - CREDENTIAL_PARTNER
+   - CREDENTIAL_REQUEST
+   - DATA_READ
+   - DEVICE_PROVIDER
+   - DOCUMENT_READ
+   - FTM_PROVIDER
+   - GLOBAL_ADMIN
+   - ID_AUTHENTICATION
+   - KEY_MAKER
+   - MASTERDATA_ADMIN
+   - METADATA_READ
+   - MISP
+   - ONLINE_VERIFICATION_PARTNER
+   - PARTNER
+   - PARTNERMANAGER
+   - PARTNER_ADMIN
+   - PMS_USER
+   - POLICYMANAGER
+   - PREREG
+   - PRE_REGISTRATION
+   - REGISTRATION_ADMIN
+   - REGISTRATION_OFFICER
+   - REGISTRATION_PROCESSOR
+   - REGISTRATION_SUPERVISOR
+   - RESIDENT
+   - ZONAL_ADMIN
+  clients:
+    - name: default-client
+      saroles:
+        - REGISTRATION_ADMIN
+        - ZONAL_ADMIN
+    - name: mosip-xyz-client
+      saroles:
+        - REGISTRATION_ADMIN
+        - REGISTRATION_OFFICER
+    - name: mosip-admin-client
+      saroles:
+        - REGISTRATION_ADMIN
+        - ZONAL_ADMIN
+        - GLOBAL_ADMIN
+        - MASTERDATA_ADMIN
+        - REGISTRATION_OFFICER
+        - REGISTRATION_SUPERVISOR
+        - REGISTRATION_PROCESSOR
+    - name: mosip-auth-client
+      saroles:
+        - AUTH
+        - ID_AUTHENTICATION
+    - name: mosip-regproc-client
+      saroles:
+        - REGISTRATION_PROCESSOR
+        - DATA_READ
+        - CREDENTIAL_ISSUANCE
+    - name: mosip-reg-client
+      saroles:
+        - REGISTRATION_ADMIN
+        - REGISTRATION_OFFICER
+        - REGISTRATION_SUPERVISOR
+    - name: mosip-ida-client
+      saroles:
+        - ID_AUTHENTICATION
+        - AUTH
+        - DATA_READ
+    - name: mosip-idrepo-client
+      saroles:
+        - DATA_READ
+        - CREDENTIAL_ISSUANCE
+    - name: mosip-resident-client
+      saroles:
+        - RESIDENT
+    - name: mosip-pms-client
+      saroles:
+        - PMS_USER
+        - PARTNERMANAGER
+        - POLICYMANAGER
+    - name: mosip-misp-client
+      saroles:
+        - MISP
+    - name: mosip-partner-client
+      saroles:
+        - PARTNER
+        - PARTNERMANAGER
+    - name: mosip-creser-client
+      saroles:
+        - CREDENTIAL_ISSUANCE
+        - CREATE_SHARE
+    - name: mosip-crereq-client
+      saroles:
+        - CREDENTIAL_REQUEST
+    - name: mosip-datsha-client
+      saroles:
+        - CREATE_SHARE
+        - DATA_READ
+    - name: mosip-hotlist-client
+      saroles:
+        - DATA_READ
+    - name: mosip-syncdata-client
+      saroles:
+        - MASTERDATA_ADMIN
+        - DATA_READ
+  users:
+    - username: test_user
+      email: test_user@xyz.com
+      firstName: Nikki
+      lastName: Jonnes
+      password: abcde
+      requiredAction: 
+        - updatePassword
+      temporary: True
+      realmRoles: []
+
+preregistration:  # realm
+  roles: 
+    - AUTH
+    - INDIVIDUAL
+    - PREREG
+    - PRE_REGISTRATION_ADMIN
+    - REGISTRATION_PROCESSOR
+    - MASTERDATA_ADMIN        
+    - DATA_READ               
+  clients: 
+    - name: mosip-prereg-client
+      saroles:
+        - PRE_REGISTRATION_ADMIN
+        - MASTERDATA_ADMIN    
+        - DATA_READ           
+    - name: mosip-new-client
+      saroles: []
+  users: []
