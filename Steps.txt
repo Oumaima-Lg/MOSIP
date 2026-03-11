@@ -1,0 +1,860 @@
+ docker system prune -f          
+
+mosipqa : Tests internes QA de MOSIP https://hub.docker.com/u/mosipqa
+mosipid : Releases officielles https://hub.docker.com/u/mosipid 
+
+mosipid :
+mosipid/keycloak-init : latest / 1.3.0 / 1.2.0.1 / 1.2.0
+mosipid/mosip-keycloak : 9.0.0 / latest / 16.1.1-debian-10-r85 / 1.2.0.1-B1 / 1.2.0
+mosipid/config-server : 1.1.2 / latest
+mosipid/pre-registration-application-service : latest / 1.3.0 / 1.2.0.1
+mosipid/pre-registration-datasync-service : latest / 1.3.0 / 1.2.0.1
+mosipid/pre-registration-batchjob : latest / 1.3.0 / 1.2.0.1
+mosipid/pre-registration-booking-service : latest / 1.3.0 / 1.2.0.1 / 1.2.0
+mosipid/pre-registration-ui : latest / 1.3.0 / 1.2.0.1 / 1.2.0
+
+mosipid/mosip-keycloak:16.1.1-debian-10-r85
+Serveur Keycloak (ne change pas entre v1.2.x et v1.3.x, c'est toujours 
+Keycloak 16.1.1 avec les thèmes MOSIP)
+
+
+-----------------------> Prérequis sur mon VPS : (
+# JDK 11
+sudo apt install openjdk-11-jdk -y
+java -version
+
+# Maven 3.53.x
+sudo apt install maven -y
+mvn -version
+
+#win
+Get-ExecutionPolicy
+Set-ExecutionPolicy AllSigned
+# Tapez "Y" (Oui) quand demandé
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+choco -v
+choco install maven --version 3.5.3 -y
+mvn -v
+
+# Git
+sudo apt install git -y
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------> 1. Database :
+PostgreSQL: 10.2
+execute the required SQL scripts to initialize the database.
+
+# 1. Puller l'image PostgreSQL
+docker pull postgres:10.2
+
+# Créer le réseau Docker commun
+docker network create mosip-network
+
+# 2. Lancer PostgreSQL
+docker run -d \
+  --name postgres \
+  --network mosip-network \
+  -p 5432:5432 \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=mosip123 \
+  -v pgdata:/var/lib/postgresql/data \
+  postgres:10
+
+# Cloner le repo (juste pour les scripts SQL)
+git clone https://github.com/mosip/pre-registration.git
+cd pre-registration
+git checkout tags/v1.2.0
+git describe --tags
+
+Editez le fichier deploy.properties pour pointer vers votre conteneur PostgreSQL :
+cd db_scripts/mosip_prereg
+nano deploy.properties
+DB_SERVERIP=postgres 
+DB_PORT=5432
+SU_USER=postgres
+SU_USER_PWD=mosip123
+DBUSER_PWD=mosip123
+DEFAULT_DB_NAME=postgres
+MOSIP_DB_NAME=mosip_prereg
+DML_FLAG=0
+
+# 1. Copier les scripts dans le conteneur PostgreSQL
+docker cp ~/MOSIP/pre-registration/db_scripts/mosip_prereg postgres:/tmp/mosip_prereg
+
+Étape 2 : Entrer dans le conteneur en mode bash
+docker exec -it postgres bash
+Étape 3 : Se déplacer dans le dossier des scripts
+cd /tmp/mosip_prereg
+Étape 4 : Exécuter les scripts un par un
+4.1 — Créer le rôle prereguser
+# Exécuter le script en passant la variable
+psql -U postgres -d postgres -v dbuserpwd="'mosip123'" -f role_dbuser.sql
+psql -U postgres -d postgres -c "CREATE ROLE prereguser WITH INHERIT LOGIN PASSWORD 'mosip123';"
+4.2 — Créer la base de données + schéma
+psql -U postgres -d postgres -f db.sql
+4.3 — Créer toutes les tables
+psql -U postgres -d mosip_prereg -f ddl.sql
+4.4 — Attribuer les droits
+psql -U postgres -d mosip_prereg -f grants.sql
+Étape 5 : Vérifier que tout est créé
+psql -U postgres -d mosip_prereg -c "\dt prereg.*"
+exit
+
+# pgAdmin (Interface Web, officielle PostgreSQL)
+docker run -d \
+  --name pgadmin \
+  --network mosip-network \
+  -p 5050:80 \
+  -e PGADMIN_DEFAULT_EMAIL=admin@admin.com \
+  -e PGADMIN_DEFAULT_PASSWORD=admin \
+  dpage/pgadmin4
+
+http://localhost:5050
+
+
+
+
+
+
+---------------------------------------------------------mosipid/postgres-init:1.2.0
+docker pull mosipid/postgres-init:1.2.0
+
+#!/bin/bash
+
+# Liste des bases à créer
+databases=(
+    "mosip_master"
+    "mosip_audit"
+    "mosip_kernel"
+    "mosip_keymgr"
+    "mosip_regprc"
+    "mosip_prereg"
+)
+
+# Boucle à travers chaque base
+for db in "${databases[@]}"; do
+    echo "========================================="
+    echo "🔄 Initialisation de $db..."
+    echo "========================================="
+
+    docker run --rm \
+      --network mosip-network \
+      -e DB_SERVERIP=postgres \
+      -e DB_PORT=5432 \
+      -e SU_USER=postgres \
+      -e SU_USER_PWD=mosip123 \
+      -e DEFAULT_DB_NAME=postgres \
+      -e DBUSER_PWD=mosip123 \
+      -e MOSIP_DB_NAME="$db" \
+      mosipid/postgres-init:1.2.0
+
+    if [ $? -eq 0 ]; then
+        echo "✅ Initialisation de $db réussie !"
+    else
+        echo "❌ Erreur lors de l'initialisation de $db"
+        exit 1
+    fi
+
+    echo ""
+    sleep 2  # Pause de 2 secondes entre chaque initialisation
+done
+
+echo "🎉 Toutes les bases ont été initialisées avec succès !"
+
+
+# Liste toutes les bases maintenant
+docker exec postgres psql -U postgres -c "\l"
+
+
+-- OTP :
+
+
+-------------------- NO
+docker exec -it postgres psql -U postgres -d mosip_master -c "
+-- Document types
+INSERT INTO master.doc_type(code, name, descr, lang_code, is_active, cr_by, cr_dtimes, upd_by, upd_dtimes, is_deleted, del_dtimes) VALUES
+('CIN','Certification of Exception','Certificate of Exception','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('DOC002','PAN card','PAN card','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('COR','Certificate of residence','Proof of Resident','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('C1','Certificate of residence1','Proof of Resident','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL)
+ON CONFLICT DO NOTHING;
+
+-- Valid documents
+INSERT INTO master.valid_document(doctyp_code, doccat_code, lang_code, is_active, cr_by, cr_dtimes, upd_by, upd_dtimes, is_deleted, del_dtimes) VALUES
+('CIN','POI','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('CIN','POI','ara',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('COR','POA','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('DOC002','POI','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL)
+ON CONFLICT DO NOTHING;
+"
+
+
+-------------- YES
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+INSERT INTO master.doc_category(code, name, descr, lang_code, is_active, cr_by, cr_dtimes, upd_by, upd_dtimes, is_deleted, del_dtimes) VALUES
+('POI','Proof of Identity','Identity Proof','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('POI','Proof of Identity','Identity Proof','ara',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('POA','Proof of Address','Address Proof','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('POA','Proof of Address','Address Proof','ara',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('POR','Proof of Relationship','Proof Relationship','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('POR','Proof of Relationship','Proof Relationship','ara',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('POB','Proof of Birth','Proof of Birth','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO master.doc_type(code, name, descr, lang_code, is_active, cr_by, cr_dtimes, upd_by, upd_dtimes, is_deleted, del_dtimes) VALUES
+('CIN','Certification of Exception','Certificate of Exception','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('DOC002','PAN card','PAN card','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('COR','Certificate of residence','Proof of Resident','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('C1','Certificate of residence1','Proof of Resident','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO master.valid_document(doctyp_code, doccat_code, lang_code, is_active, cr_by, cr_dtimes, upd_by, upd_dtimes, is_deleted, del_dtimes) VALUES
+('CIN','POI','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('CIN','POI','ara',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('COR','POA','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
+('DOC002','POI','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL)
+ON CONFLICT DO NOTHING;
+EOF
+
+
+
+docker exec -it postgres psql -U postgres -d mosip_master -c "SELECT COUNT(*) FROM master.valid_document;"
+docker exec -it postgres psql -U postgres -d mosip_master -c "SELECT COUNT(*) FROM master.doc_type;"
+
+
+----------------------------------------------------------------------------------------------------------> 2. Keycloak
+# 1. Keycloak Server (version standard Bitnami)
+docker pull mosipid/mosip-keycloak:1.2.0
+
+# 2. Keycloak Init (pour initialiser les données MOSIP : realms, clients, rôles)
+docker pull mosipid/keycloak-init:1.2.0
+
+** Créer la base de données Keycloak dans PostgreSQL
+docker exec -it postgres bash
+psql -U postgres -c "CREATE DATABASE mosip_keycloak;"
+psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE mosip_keycloak TO postgres;"
+exit
+
+** Lancer Keycloak Server
+docker run -d \
+  --name keycloak \
+  --network mosip-network \
+  -p 8080:8080 \
+  -e DB_VENDOR=postgres \
+  -e DB_ADDR=postgres \
+  -e DB_PORT=5432 \
+  -e DB_DATABASE=mosip_keycloak \
+  -e DB_USER=postgres \
+  -e DB_PASSWORD=mosip123 \
+  -e KEYCLOAK_USER=admin \
+  -e KEYCLOAK_PASSWORD=mosip123 \
+  -e PROXY_ADDRESS_FORWARDING=true \
+  -v keycloak_data:/opt/jboss/keycloak/standalone/data \
+  mosipid/mosip-keycloak:1.2.0
+
+
+
+** Vérifier que Keycloak démarre correctement :
+# Suivre les logs en temps réel
+docker logs -f keycloak
+
+** Tester dans le navigateur : http://localhost:8080
+# Credentials: admin / mosip123
+
+** Lancer Keycloak Init : Le keycloak-init va créer automatiquement : 
+-Le realm mosip
+-Le client mosip-prereg-client (nécessaire pour Pre-Registration)
+-Les rôles et utilisateurs de base
+
+mkdir -p ~/MOSIP/keycloak-init-config
+mkdir keycloak-init-config
+cd ~/MOSIP/keycloak-init-config
+nano input.yaml 
+--
+https://github.com/mosip/mosip-infra/blob/v1.2.0-rc1/build/keycloak-init/input.yaml 
+--
+nano .env
+--
+default_client_secret=default_client_secret_123456
+mosip_default_client_secret=default_client_secret_123456
+mosip_xyz_client_secret=xyz_client_secret_123456
+mosip_mosip_xyz_client_secret=xyz_client_secret_123456
+mosip_prereg_client_secret=prereg_client_secret_123456
+preregistration_mosip_prereg_client_secret=prereg_client_secret_123456
+mosip_new_client_secret=new_client_secret_123456
+preregistration_mosip_new_client_secret=new_client_secret_123456
+--
+mv .env.txt .env
+
+docker run --rm -it `
+  --name keycloak-init `
+  --network mosip-network `
+  -v C:\Users\olaghjibi\MOSIP\keycloak-init-config:/opt/mosip/input `
+  --env-file C:\Users\olaghjibi\MOSIP\keycloak-init-config\.env `
+  -e KEYCLOAK_ADMIN_USER=admin `
+  -e KEYCLOAK_ADMIN_PASSWORD=mosip123 `
+  -e KEYCLOAK_SERVER_URL=http://keycloak:8080 `
+  mosipid/keycloak-init:1.2.0
+
+
+
+----------------------------------------------------------------------------------------------------------> 3. Config Server
+#MinIO
+docker run -d \
+  --name minio \
+  --network mosip-network \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  -e MINIO_ROOT_USER=minioadmin \
+  -e MINIO_ROOT_PASSWORD=minioadmin \
+  -v minio_data:/data \
+  quay.io/minio/minio server /data --console-address ":9001"
+
+Ensuite tu peux vérifier qu'il tourne via l'interface web : 
+http://localhost:9001 avec minioadmin / minioadmin.
+Tu dois aussi créer le bucket manuellement dans MinIO — MOSIP s'attend à trouver un bucket nommé
+ prereg (c'est la valeur de mosip.kernel.objectstore.account-name=prereg dans ton fichier) :
+# Soit via l'interface web http://localhost:9001 → Buckets → Create Bucket → "prereg"
+# Soit via CLI
+docker exec minio mc alias set local http://localhost:9000 minioadmin minioadmin
+docker exec minio mc mb local/prereg
+
+
+git clone https://github.com/mosip/mosip-config.git
+cd mosip-config
+git checkout tags/v1.2.0
+git describe --tags
+
+
+steps : https://docs.mosip.io/1.2.0/id-lifecycle-management/identity-issuance/registration-processor/develop/registration-processor-developers-guide#environment-setup
+
+mkdir sandbox-local
+** Copier tous les fichiers sauf .gitignore, README, LICENSE dans sandbox-local
+cp -r $(ls -A | grep -Ev 'sandbox-local|\.gitignore|README|LICENSE') sandbox-local/
+
+**Modifier les fichiers de config : PostgreSQL, Keycloak, Kernel, etc.
+
+**return to mosip folder : cd ../
+mkdir config-server
+cd mosip/config-server
+--.env
+DB_DBUSER_PASSWORD=mosip123
+PREREGISTRATION_CLIENT_SECRET=prereg_client_secret_123456
+KEYCLOAK_HOST=http://keycloak:8080
+PREREG_CAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
+PREREG_CAPTCHA_SECRET_KEY=6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
+--
+touch config-server-start.sh
+nano config-server-start.sh
+- ----
+# java -jar -Dspring.profiles.active=native  -Dspring.cloud.config.server.native.search-locations=file:C:\Users\olaghjibi\MOSIP\mosip-config\sandbox-local -Dspring.cloud.config.server.accept-empty=true  -Dspring.cloud.config.server.git.force-pull=false -Dspring.cloud.config.server.git.cloneOnStart=false -Dspring.cloud.config.server.git.refreshRate=0 kernel-config-server-1.2.0-20201016.134941-57.jar 
+#!/bin/bash
+# Charger les variables d'environnement
+source .env
+
+java -jar \
+  -Ddb.dbuser.password="${DB_DBUSER_PASSWORD}" \
+  -Dpreregistration.mosip.prereg.client.secret="${PREREGISTRATION_CLIENT_SECRET}" \
+  -Dkeycloak.host="${KEYCLOAK_HOST}" \
+  -Dprereg.captcha.site.key="${PREREG_CAPTCHA_SITE_KEY}" \
+  -Dprereg.captcha.secret.key="${PREREG_CAPTCHA_SECRET_KEY}" \
+  -Dspring.profiles.active=native \
+  -Dspring.cloud.config.server.native.search-locations=file:///C:/Users/olaghjibi/MOSIP/mosip-config/sandbox-local/ \
+  -Dspring.cloud.config.server.accept-empty=true \
+  -Dspring.cloud.config.server.git.force-pull=false \
+  -Dspring.cloud.config.server.git.cloneOnStart=false \
+  -Dspring.cloud.config.server.git.refreshRate=0 \
+  kernel-config-server-1.2.0-20201016.134941-57.jar
+-
+*native = lire depuis sandbox-local (Utilise des fichiers locaux (sandbox-local), pas Git.)
+**two files are required- kernel-config-server.jar and config-server-start.bat. (into config-server)
+chmod +x config-server-start.sh
+**install java 11
+./config-server-start.sh
+
+Test : curl http://localhost:51000/config/pre-registration-application-service/default
+
+
+
+docker run -d \
+  --name config-server \
+  --network mosip-network \
+  -p 8888:8888 \
+  -v ~/MOSIP/mosip-config/sandbox-local:/config \
+  -e SPRING_PROFILES_ACTIVE=native \
+  -e SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS=file:/config \
+  openjdk:11-jre-slim \
+  java -jar /config-server.jar
+
+
+-------------------------------------------------CONFIG------------------------------------
+**application-default.properties:
+
+mosip.prereg-application-service.url=http://pre-registration-application-service:9090
+mosip.prereg-booking-service.url=http://pre-registration-booking-service:9095                                                      
+mosip.prereg-batchjob-service.url=http://pre-registration-batchjob:9097                                                               
+mosip.prereg-booking-service.url=http://pre-registration-booking-service:9095
+mosip.prereg-captcha-service.url=http://pre-registration-captcha-service:9098
+mosip.prereg-datasync-service.url=http://pre-registration-datasync-service:9094
+mosip.prereg-ui.url=http://pre-registration-ui:8080
+
+mosip.kernel-auth-service.url=http://kernel-auth-service:8091
+mosip.kernel-auditmanager-service.url=http://kernel-auditmanager-service:8081
+mosip.kernel-masterdata-service.url=http://kernel-masterdata-service:8086                
+mosip.kernel-pridgenerator-service.url=http://kernel-pridgenerator-service:8100
+mosip.kernel-syncdata-service.url=http://kernel-syncdata-service:8089  
+
+db.dbuser.password=mosip123
+
+__keycloak.external.host=http://keycloak:8080  
+
+**A adpater plus tard :
+Notification (196)
+kernel-keymanager-service (234)   &&&   ${softhsm.kernel.pin} dans file kernel
+otp (272)
+
+**pre-registration-default.properties :
+
+mosip.database.port=5432
+mosip.preregistration.document.scan=false
+preregistration.availability.noOfDays=30
+mosip.id.validation.identity.phone=^[0-9]{10,15}$
+mosip.preregistration.captcha.enable=false
+__mosip.security.origins:http://localhost:8081,http://localhost:4200,http://pre-registration-ui:8080
+
+
+**kernel-default.properties
+mosip.kernel.database.port=5432 
+mosip.security.origins=*
+db.dbuser.password
+
+
+
+
+-------------------------------------------------Kernel------------------------------------
+
+# Vérifier que les 3 services répondent
+curl http://localhost:8091/v1/authmanager/actuator/health
+curl http://localhost:8082/v1/auditmanager/actuator/health
+curl http://localhost:8086/v1/masterdata/actuator/health
+
+
+--> kernel-auth-service
+docker run -d \
+  --name kernel-auth-service \
+  --network mosip-network \
+  -p 8091:8091 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://host.docker.internal:51000/config \
+  -e iam_adapter_url_env="https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar" \
+  -e is_glowroot_env=notpresent \
+  mosipid/kernel-auth-service:1.2.0
+
+--> kernel-auditmanager-service
+docker run -d \
+  --name kernel-auditmanager-service \
+  --network mosip-network \
+  -p 8082:8081 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://host.docker.internal:51000/config \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  -e is_glowroot_env=notpresent \
+  mosipid/kernel-auditmanager-service:1.2.0
+
+--> kernel-masterdata-service
+docker run -d \
+  --name kernel-masterdata-service \
+  --network mosip-network \
+  -p 8086:8086 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://host.docker.internal:51000/config \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  -e is_glowroot_env=notpresent \
+  mosipid/kernel-masterdata-service:1.2.0
+
+--> kernel-pridgenerator-service
+docker pull mosipid/kernel-pridgenerator-service:1.2.0
+docker run -d \
+  --name kernel-pridgenerator-service \
+  --network mosip-network \
+  -p 8100:8100 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://host.docker.internal:51000/config \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  -e is_glowroot_env=notpresent \
+  mosipid/kernel-pridgenerator-service:1.2.0
+
+--> kernel-syncdata-service
+docker pull mosipid/kernel-syncdata-service:1.2.0
+docker run -d \
+  --name kernel-syncdata-service \
+  --network mosip-network \
+  -p 8089:8089 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://host.docker.internal:51000/config \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  -e is_glowroot_env=notpresent \
+  mosipid/kernel-syncdata-service:1.2.0
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------> 4. Backend
+- Pull services.
+Application Service
+Datasync Service
+Batchjob Service
+Booking Service
+verifier et voir autre (core)
+
+-> Test:
+curl http://localhost:9090/preregistration/v1/login/config
+curl http://localhost:9090/preregistration/v1/health
+
+
+-> pre-registration-application-service:1.2.0
+
+#Upload jars :
+cd C:\Users\olaghjibi\MOSIP\jars
+# kernel-transliteration-icu4j
+Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/io/mosip/kernel/kernel-transliteration-icu4j/1.2.0/kernel-transliteration-icu4j-1.2.0.jar" -OutFile "kernel-transliteration-icu4j-1.2.0.jar"
+# kernel-ref-idobjectvalidator
+Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/io/mosip/kernel/kernel-ref-idobjectvalidator/1.2.0/kernel-ref-idobjectvalidator-1.2.0.jar" -OutFile "kernel-ref-idobjectvalidator-1.2.0.jar"
+# kernel-virusscanner-clamav
+Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/io/mosip/kernel/kernel-virusscanner-clamav/1.2.0/kernel-virusscanner-clamav-1.2.0.jar" -OutFile "kernel-virusscanner-clamav-1.2.0.jar"
+Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/com/ibm/icu/icu4j/70.1/icu4j-70.1.jar" -OutFile "icu4j-70.1.jar"
+
+
+#Crée le Dockerfile Dans C:\Users\olaghjibi\MOSIP\  :
+-----
+FROM mosipid/pre-registration-application-service:1.2.0
+
+COPY jars/kernel-transliteration-icu4j-1.2.0.jar /home/mosip/additional_jars/kernel-transliteration-icu4j.jar
+COPY jars/icu4j-70.1.jar /home/mosip/additional_jars/icu4j.jar
+COPY jars/kernel-auth-adapter-1.2.0.jar /home/mosip/additional_jars/kernel-auth-adapter.jar
+COPY jars/kernel-ref-idobjectvalidator-1.2.0.jar /home/mosip/additional_jars/kernel-ref-idobjectvalidator.jar
+COPY jars/kernel-virusscanner-clamav-1.2.0.jar /home/mosip/additional_jars/kernel-virusscanner-clamav.jar
+----
+
+cd C:\Users\olaghjibi\MOSIP
+
+# Build
+docker build -t pre-reg-custom:1.2.0 .
+
+# Lance
+docker run -d `
+  --name pre-registration-application-service `
+  --network mosip-network `
+  -p 9090:9090 `
+  -e active_profile_env=default `
+  -e spring_config_label_env=master `
+  -e spring_config_url_env=http://host.docker.internal:51000/config `
+  -e iam_adapter_url_env="http://localhost/skip" `
+  -e artifactory_url_env="http://localhost/skip" `
+  -e virusscanner_url_env="http://localhost/skip" `
+  -e is_glowroot_env=notpresent `
+  pre-reg-custom:1.2.0
+
+
+--> pre-registration-booking-service:1.2.0 
+docker pull mosipid/pre-registration-booking-service:1.2.0     docker pull mosipid/pre-registration-booking-service:1.2.0-rc1
+
+cd C:\Users\olaghjibi\MOSIP
+@"
+FROM mosipid/pre-registration-booking-service:1.2.0
+COPY jars/kernel-auth-adapter-1.2.0.jar /home/mosip/additional_jars/kernel-auth-adapter.jar
+COPY jars/kernel-ref-idobjectvalidator-1.2.0.jar /home/mosip/additional_jars/kernel-ref-idobjectvalidator.jar
+"@ | Set-Content "Dockerfile.booking"
+docker build -t pre-reg-booking-custom:1.2.0 -f Dockerfile.booking .
+
+
+docker run -d \
+  --name pre-registration-booking-service \
+  --network mosip-network \
+  -p 9095:9095 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://host.docker.internal:51000/config \
+  -e iam_adapter_url_env="http://localhost/skip" \
+  -e artifactory_url_env="http://localhost/skip" \
+  -e is_glowroot_env=notpresent \
+  pre-reg-booking-custom:1.2.0
+
+docker logs -f pre-registration-booking-service 2>&1 | grep -E "Started|ERROR|Exception|connection|database"
+
+-> pre-registration-datasync-service:1.2.0
+docker pull mosipid/pre-registration-datasync-service:1.2.0
+
+@"
+FROM mosipid/pre-registration-datasync-service:1.2.0
+COPY jars/kernel-auth-adapter-1.2.0.jar /home/mosip/additional_jars/kernel-auth-adapter.jar
+"@ | Set-Content "C:\Users\olaghjibi\MOSIP\Dockerfile.datasync"
+
+cd C:\Users\olaghjibi\MOSIP
+
+docker build -t pre-reg-datasync-custom:1.2.0 -f Dockerfile.datasync .
+
+docker run -d `
+  --name pre-registration-datasync-service `
+  --network mosip-network `
+  -p 9094:9094 `
+  -e active_profile_env=default `
+  -e spring_config_label_env=master `
+  -e spring_config_url_env=http://host.docker.internal:51000/config `
+  -e iam_adapter_url_env="http://localhost/skip" `
+  -e artifactory_url_env="http://localhost/skip" `
+  -e is_glowroot_env=notpresent `
+  pre-reg-datasync-custom:1.2.0
+
+docker logs -f pre-registration-datasync-service 2>&1 | grep -E "Started|ERROR|Exception|dev.mosip|jdbc"
+
+
+-> pre-registration-batchjob:1.2.0
+docker pull mosipid/pre-registration-batchjob:1.2.0
+
+cd C:\Users\olaghjibi\MOSIP
+
+# Dockerfile batchjob
+@"
+FROM mosipid/pre-registration-batchjob:1.2.0
+COPY jars/kernel-auth-adapter-1.2.0.jar /home/mosip/additional_jars/kernel-auth-adapter.jar
+"@ | Set-Content "Dockerfile.batchjob"
+
+docker build -t pre-reg-batchjob-custom:1.2.0 -f Dockerfile.batchjob .
+
+docker run -d \
+  --name pre-registration-batchjob \
+  --network mosip-network \
+  -p 9097:9097 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://host.docker.internal:51000/config \
+  -e iam_adapter_url_env="http://localhost/skip" \
+  -e artifactory_url_env="http://localhost/skip" \
+  -e is_glowroot_env=notpresent \
+  pre-reg-batchjob-custom:1.2.0
+
+
+-> pre-registration-captcha-service:1.2.0
+docker pull mosipid/pre-registration-captcha-service:1.2.0
+
+
+
+
+
+
+
+— Setup :
+https://docs.mosip.io/1.2.0/id-lifecycle-management/identity-issuance/pre-registration/develop/pre-registration-developer-setup
+
+lombok.jar 
+MOSIP Pre-registration specific JARs: kernel-auth-adapter, kernel-transliteration-icu4j, kernel-ref-idobjectvalidator, kernel-virusscanner-clamav
+settings.xml
+Notepad++ (optional)
+
+
+
+— Télécharger les JARs spécifiques MOSIP
+mkdir -p ~/MOSIP/jars && cd ~/MOSIP/jars
+wget https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar
+wget https://repo1.maven.org/maven2/io/mosip/kernel/kernel-transliteration-icu4j/1.2.0/kernel-transliteration-icu4j-1.2.0.jar
+wget https://repo1.maven.org/maven2/io/mosip/kernel/kernel-ref-idobjectvalidator/1.2.0/kernel-ref-idobjectvalidator-1.2.0.jar
+wget https://repo1.maven.org/maven2/io/mosip/kernel/kernel-virusscanner-clamav/1.2.0/kernel-virusscanner-clamav-1.2.0.jar
+
+— Installez-les dans Maven local :
+mvn install:install-file -Dfile=kernel-auth-adapter-1.2.0.jar -DgroupId=io.mosip.kernel -DartifactId=kernel-auth-adapter -Dversion=1.2.0 -Dpackaging=jar
+mvn install:install-file -Dfile=kernel-transliteration-icu4j-1.2.0.jar -DgroupId=io.mosip.kernel -DartifactId=kernel-transliteration-icu4j -Dversion=1.2.0 -Dpackaging=jar
+mvn install:install-file -Dfile=kernel-ref-idobjectvalidator-1.2.0.jar -DgroupId=io.mosip.kernel -DartifactId=kernel-ref-idobjectvalidator -Dversion=1.2.0 -Dpackaging=jar
+mvn install:install-file -Dfile=kernel-virusscanner-clamav-1.2.0.jar -DgroupId=io.mosip.kernel -DartifactId=kernel-virusscanner-clamav -Dversion=1.2.0 -Dpackaging=jar
+
+ — Configurer settings.xml Maven
+wget https://raw.githubusercontent.com/mosip/documentation/1.2.0/docs/_files/pre-registration-config-files/settings.xml
+cp settings.xml ~/.m2/settings.xml
+
+— Modifier `bootstrap.properties`
+cd ~/MOSIP/pre-registration/pre-registration/pre-registration-application-service/src/main/resources
+nano bootstrap.properties
+--
+spring.application.name=pre-registration-application-service
+spring.profiles.active=default
+spring.cloud.config.uri=http://localhost:8080
+spring.cloud.config.label=develop
+spring.cloud.config.name=pre-registration
+spring.cloud.config.enabled=false
+--
+nano application.properties
+---
+# Base URL (votre VPS, pas localhost car Docker tourne dessus)
+mosip.base.url=http://localhost:8080
+# Keycloak — utiliser l'IP du conteneur ou localhost si port exposé
+auth-token-generator.rest.issuerUrl=http://localhost:8080/auth/realms/mosip
+auth.server.admin.issuer.uri=http://localhost:8080/auth/realms/
+# PostgreSQL
+javax.persistence.jdbc.url=jdbc:postgresql://localhost:5432/mosip_prereg
+javax.persistence.jdbc.password=mosip123
+# IAM client (valeur définie dans votre .env keycloak-init)
+mosip.iam.adapter.appid=prereg
+mosip.iam.adapter.clientsecret=prereg_client_secret_123456
+# Batch
+mosip.batch.token.authmanager.password=mosip123
+--
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------> 5. UI :
+docker pull mosipid/pre-registration-ui:1.2.0
+
+# 1. Clone le repository de l'UI
+cd C:\Users\olaghjibi\MOSIP
+git clone https://github.com/mosip/pre-registration-ui.git
+cd pre-registration-ui
+git checkout v1.2.0
+
+# 2. Vérifie que le dossier i18n existe
+ls pre-registration-ui/src/assets/i18n/
+# Tu devrais voir : en.json, fr.json, ar.json, etc.
+
+# 3. Compresse ce dossier pour créer le bundle
+cd pre-registration-ui/src/assets
+Compress-Archive -Path i18n -DestinationPath pre-registration-i18n-bundle.zip
+
+# 4. Copie vers ton file-server
+New-Item -ItemType Directory -Force -Path C:\Users\olaghjibi\MOSIP\i18n
+Copy-Item pre-registration-i18n-bundle.zip C:\Users\olaghjibi\MOSIP\i18n\
+
+# run file-server
+docker run -d `
+  --name file-server `
+  --network mosip-network `
+  -v C:\Users\olaghjibi\MOSIP\i18n:/usr/share/nginx/html:ro `
+  nginx:alpine
+
+# adapter l'env pour interagir avec le back: voir https://docs.mosip.io/1.2.0/id-lifecycle-management/identity-issuance/pre-registration/develop/pre-registration-developer-setup
+mkdir custom-config
+cd custom-config
+nano config.json
+--
+{
+  "BASE_URL": "http://pre-registration-application-service:9090/",
+  "PRE_REG_URL": "preregistration/v1/"
+}
+--
+
+# Lancer le front:
+docker run -d `
+  --name pre-reg-ui `
+  --network mosip-network `
+  -p 8081:8080 `
+  -v C:\Users\olaghjibi\MOSIP\custom-config\config.json:/usr/share/nginx/html/assets/config.json `
+  -e preregistration_i18n_bundle_url_env=http://file-server/pre-registration-i18n-bundle.zip `
+  mosipid/pre-registration-ui:1.2.0
+
+http://localhost:8081/pre-registration-ui/#/eng
+
+
+
+--------------------------------------------------
+
+cd "C:\Users\olaghjibi\mosip\pre-registration-ui\pre-registration-ui\src\assets\i18n"
+Compress-Archive -Path * -DestinationPath "C:\Users\olaghjibi\MOSIP\i18n\pre-registration-i18n-bundle.zip" -Force
+
+New-Item -ItemType Directory -Force -Path "C:\Users\olaghjibi\MOSIP\custom-config"
+@"
+{
+  "BASE_URL": "http://localhost:9090/",
+  "PRE_REG_URL": "preregistration/v1/"
+}
+"@ | Set-Content "C:\Users\olaghjibi\MOSIP\custom-config\config.json"
+
+# File server
+docker run -d \
+  --name file-server \
+  --network mosip-network \
+  -p 8083:80 \
+  -v /c/Users/olaghjibi/MOSIP/i18n:/usr/share/nginx/html:ro \
+  nginx:alpine
+
+docker cp /c/Users/olaghjibi/MOSIP/i18n/pre-registration-i18n-bundle.zip file-server:/usr/share/nginx/html/
+
+# Verify zip is accessible
+curl http://localhost:8083/pre-registration-i18n-bundle.zip -o /dev/null -w "%{http_code}"
+
+# Launch UI
+docker run -d \
+  --name pre-reg-ui \
+  --network mosip-network \
+  -p 8081:8080 \
+  -v /c/Users/olaghjibi/MOSIP/custom-config/config.json:/usr/share/nginx/html/assets/config.json \
+  -e preregistration_i18n_bundle_url_env=http://file-server/pre-registration-i18n-bundle.zip \
+  mosipid/pre-registration-ui:1.2.0
+
+
+
+--> Solve CORS ISSUE : OPTION 1 
+
+# Check current CORS config
+Select-String -Path "C:\Users\olaghjibi\MOSIP\mosip-config\sandbox-local\application-default.properties" -Pattern "cors|origins"
+
+# Add to application-default.properties
+Add-Content "C:\Users\olaghjibi\MOSIP\mosip-config\sandbox-local\application-default.properties" @"
+
+# CORS
+mosip.security.origins=localhost:8081,localhost:8080,localhost:4200
+mosip.security.cors-enable=true
+"@
+
+docker restart pre-registration-application-service
+
+--> Solve CORS ISSUE : OPTION 2 (nginx reverse proxy)
+# All requests go to localhost:80
+# /preregistration/ → pre-registration-application-service:9090
+# / → pre-reg-ui:8080
+
+# Create the nginx config:
+New-Item -ItemType Directory -Force -Path "C:\Users\olaghjibi\MOSIP\nginx-proxy"
+@"
+server {
+    listen 80;
+    location / {
+        proxy_pass http://pre-reg-ui:8080/;
+    }
+    location /preregistration/ {
+        proxy_pass http://pre-registration-application-service:9090/preregistration/;
+        proxy_set_header Host `$host;
+        proxy_set_header X-Real-IP `$remote_addr;
+    }
+}
+"@ | Set-Content "C:\Users\olaghjibi\MOSIP\nginx-proxy\default.conf"
+
+
+docker run -d \
+  --name mosip-proxy \
+  --network mosip-network \
+  -p 80:80 \
+  -v /c/Users/olaghjibi/MOSIP/nginx-proxy/default.conf:/etc/nginx/conf.d/default.conf:ro \
+  nginx:alpine
+
+
+# Then update config.json to use the proxy:
+@"
+{
+  "BASE_URL": "http://localhost/",
+  "PRE_REG_URL": "preregistration/v1/"
+}
+"@ | Set-Content "C:\Users\olaghjibi\MOSIP\custom-config\config.json"
+
+docker cp /c/Users/olaghjibi/MOSIP/custom-config/config.json pre-reg-ui:/usr/share/nginx/html/assets/config.json
+
+docker cp /c/Users/olaghjibi/MOSIP/nginx-proxy/default.conf mosip-proxy:/etc/nginx/conf.d/default.conf
+docker exec mosip-proxy nginx -s reload
+
+
+
