@@ -1,0 +1,2 @@
+FROM mosipid/kernel-otpmanager-service:1.2.0
+COPY jars/kernel-auth-adapter-1.2.0.jar /home/mosip/additional_jars/kernel-auth-adapter.jar

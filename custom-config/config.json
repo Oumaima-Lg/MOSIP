@@ -1,4 +1,4 @@
 {
-  "BASE_URL": "http://pre-registration-application-service:9090/",
+  "BASE_URL": "http://localhost/",
   "PRE_REG_URL": "preregistration/v1/"
 }
