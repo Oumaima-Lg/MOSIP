@@ -169,9 +169,6 @@ echo "🎉 Toutes les bases ont été initialisées avec succès !"
 docker exec postgres psql -U postgres -c "\l"
 
 
--- OTP :
-
-
 -------------------- NO
 docker exec -it postgres psql -U postgres -d mosip_master -c "
 -- Document types
@@ -224,6 +221,136 @@ EOF
 docker exec -it postgres psql -U postgres -d mosip_master -c "SELECT COUNT(*) FROM master.valid_document;"
 docker exec -it postgres psql -U postgres -d mosip_master -c "SELECT COUNT(*) FROM master.doc_type;"
 
+
+
+# Issues :
+##--> The email template OTP-email-subject-template is not found in the database — returns null, causing NPE. Insert the missing templates:
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+INSERT INTO master.template(id, name, descr, file_format_code, model, file_txt, module_id, module_name, template_type_code, lang_code, is_active, cr_by, cr_dtimes, upd_by, upd_dtimes, is_deleted, del_dtimes)
+VALUES
+('OTP-email-subject-template', 'OTP Email Subject', 'OTP Email Subject', 'txt', NULL, 'OTP for Pre-Registration', 'PREREG', 'Pre-Registration', 'OTP-email-subject-template', 'eng', TRUE, 'superadmin', NOW(), NULL, NULL, FALSE, NULL),
+('OTP-email-content-template', 'OTP Email Content', 'OTP Email Content', 'txt', NULL, 'Dear $name, Your OTP is $otp. It is valid for $validTime minutes.', 'PREREG', 'Pre-Registration', 'OTP-email-content-template', 'eng', TRUE, 'superadmin', NOW(), NULL, NULL, FALSE, NULL),
+('otp-sms-template', 'OTP SMS', 'OTP SMS', 'txt', NULL, 'Your OTP is $otp. Valid for $validTime minutes.', 'PREREG', 'Pre-Registration', 'otp-sms-template', 'eng', TRUE, 'superadmin', NOW(), NULL, NULL, FALSE, NULL)
+ON CONFLICT DO NOTHING;
+EOF
+
+##--> Both reference tables are empty — we need to insert into them first. Let's insert everything in the correct order:
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+-- 1. Template file format
+INSERT INTO master.template_file_format(code, descr, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES ('txt', 'Text', 'eng', TRUE, 'superadmin', NOW(), FALSE)
+ON CONFLICT DO NOTHING;
+
+-- 2. Template type
+INSERT INTO master.template_type(code, descr, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES 
+('OTP-email-subject-template', 'OTP Email Subject', 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('OTP-email-content-template', 'OTP Email Content', 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('otp-sms-template', 'OTP SMS', 'eng', TRUE, 'superadmin', NOW(), FALSE)
+ON CONFLICT DO NOTHING;
+
+-- 3. Templates
+INSERT INTO master.template(id, name, descr, file_format_code, model, file_txt, module_id, module_name, template_typ_code, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES
+('1', 'OTP Email Subject', 'OTP Email Subject', 'txt', NULL, 'OTP for Pre-Registration', 'PREREG', 'Pre-Registration', 'OTP-email-subject-template', 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('2', 'OTP Email Content', 'OTP Email Content', 'txt', NULL, 'Dear $name, Your OTP is $otp. Valid for $validTime minutes.', 'PREREG', 'Pre-Registration', 'OTP-email-content-template', 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('3', 'OTP SMS', 'OTP SMS', 'txt', NULL, 'Your OTP is $otp. Valid for $validTime minutes.', 'PREREG', 'Pre-Registration', 'otp-sms-template', 'eng', TRUE, 'superadmin', NOW(), FALSE)
+ON CONFLICT DO NOTHING;
+EOF
+
+
+##-->The master.language table is empty. The service first validates the language code and returns null when not found. Insert the languages:
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+INSERT INTO master.language(code, name, native_name, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES 
+('eng', 'English', 'English', TRUE, 'superadmin', NOW(), FALSE),
+('ara', 'Arabic', 'عربى', TRUE, 'superadmin', NOW(), FALSE),
+('fra', 'French', 'Français', TRUE, 'superadmin', NOW(), FALSE)
+ON CONFLICT DO NOTHING;
+EOF
+
+
+##-->Both tables are empty. We need to insert an identity schema first, then a UI spec. Let me insert a minimal but valid one:
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+-- 1. Insert identity schema
+INSERT INTO master.identity_schema(id, id_version, title, description, schema_json, status_code, add_props, effective_from, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES (
+  '1',
+  0.1,
+  'MOSIP Identity Schema',
+  'MOSIP Identity Schema',
+  '{"$schema":"http://json-schema.org/draft-07/schema#","description":"MOSIP Identity Object","additionalProperties":false,"title":"MOSIP Identity","type":"object","definitions":{"simpleType":{"uniqueItems":true,"additionalItems":false,"type":"array","items":{"additionalProperties":false,"type":"object","required":["language","value"],"properties":{"language":{"type":"string"},"value":{"type":"string"}}}},"documentType":{"additionalProperties":false,"type":"object","properties":{"format":{"type":"string"},"type":{"type":"string"},"value":{"type":"string"}}},"biometricsType":{"additionalProperties":false,"type":"object","properties":{"format":{"type":"string"},"version":{"minimum":0,"type":"number"},"value":{"type":"string"}}}},"properties":{"identity":{"additionalProperties":false,"type":"object","required":["fullName","dateOfBirth","gender","addressLine1","region","province","city","zone","postalCode","phone","email","residenceStatus","referenceIdentityNumber"],"properties":{"fullName":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"fullName","description":"Full Name","type":"array","validators":[],"transliteration":true},"dateOfBirth":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","id":"dateOfBirth","description":"Date Of Birth","validators":[]},"gender":{"bioAttributes":[],"fieldCategory":"pvt","format":"","fieldType":"default","$ref":"#/definitions/simpleType","id":"gender","description":"Gender","type":"array","validators":[]},"addressLine1":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"addressLine1","description":"Address Line1","type":"array","validators":[]},"region":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"region","description":"Region","type":"array","validators":[]},"province":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"province","description":"Province","type":"array","validators":[]},"city":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"city","description":"City","type":"array","validators":[]},"zone":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"zone","description":"Zone","type":"array","validators":[]},"postalCode":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","id":"postalCode","description":"Postal Code","validators":[]},"phone":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","id":"phone","description":"Phone","validators":[]},"email":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","id":"email","description":"Email","validators":[]},"residenceStatus":{"bioAttributes":[],"fieldCategory":"kyc","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"residenceStatus","description":"Residence Status","type":"array","validators":[]},"referenceIdentityNumber":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","id":"referenceIdentityNumber","description":"Reference Identity Number","validators":[]}}}}}',
+  'PUBLISHED',
+  false,
+  NOW(),
+  'eng',
+  TRUE,
+  'superadmin',
+  NOW(),
+  FALSE
+);
+
+-- 2. Insert UI spec
+INSERT INTO master.ui_spec(id, version, domain, title, description, type, json_spec, identity_schema_id, identity_schema_version, effective_from, status_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES (
+  '1',
+  0.1,
+  'pre-registration',
+  'Pre Registration UI Spec',
+  'Pre Registration UI Spec',
+  'schema',
+  '{"identity":{"fullName":[{"language":"eng","label":"Full Name","controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":null,"required":true}],"dateOfBirth":[{"language":"eng","label":"Date Of Birth","controlType":"date","fieldType":"default","format":"none","validators":[],"bioAttributes":null,"required":true}],"gender":[{"language":"eng","label":"Gender","controlType":"dropdown","fieldType":"default","format":"","validators":[],"bioAttributes":null,"required":true}],"addressLine1":[{"language":"eng","label":"Address Line 1","controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":null,"required":true}],"region":[{"language":"eng","label":"Region","controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":null,"required":true}],"province":[{"language":"eng","label":"Province","controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":null,"required":true}],"city":[{"language":"eng","label":"City","controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":null,"required":true}],"zone":[{"language":"eng","label":"Zone","controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":null,"required":true}],"postalCode":[{"language":"eng","label":"Postal Code","controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":null,"required":true}],"phone":[{"language":"eng","label":"Phone","controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":null,"required":true}],"email":[{"language":"eng","label":"Email","controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":null,"required":true}],"residenceStatus":[{"language":"eng","label":"Residence Status","controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":null,"required":true}],"referenceIdentityNumber":[{"language":"eng","label":"Reference Identity Number","controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":null,"required":true}]}}',
+  '1',
+  0.1,
+  NOW(),
+  'PUBLISHED',
+  TRUE,
+  'superadmin',
+  NOW(),
+  FALSE
+);
+EOF
+
+
+##--> update the json_spec in the database to be a plain object with identity directly at the top level:
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+UPDATE master.ui_spec SET json_spec = '{"identity":[{"id":"fullName","description":"Full Name","labelName":[{"language":"eng","value":"Full Name"}],"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"transliteration":true,"visible":true,"type":"string","group":"FullName","alignmentGroup":"FullName"},{"id":"dateOfBirth","description":"Date Of Birth","labelName":[{"language":"eng","value":"Date Of Birth"}],"controlType":"date","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","group":"DateOfBirth"},{"id":"gender","description":"Gender","labelName":[{"language":"eng","value":"Gender"}],"controlType":"dropdown","fieldType":"default","format":"","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"Gender"},{"id":"addressLine1","description":"Address Line1","labelName":[{"language":"eng","value":"Address Line 1"}],"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"Address"},{"id":"region","description":"Region","labelName":[{"language":"eng","value":"Region"}],"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"Address"},{"id":"province","description":"Province","labelName":[{"language":"eng","value":"Province"}],"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"Address"},{"id":"city","description":"City","labelName":[{"language":"eng","value":"City"}],"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"Address"},{"id":"zone","description":"Zone","labelName":[{"language":"eng","value":"Zone"}],"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"Address"},{"id":"postalCode","description":"Postal Code","labelName":[{"language":"eng","value":"Postal Code"}],"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","group":"Address"},{"id":"phone","description":"Phone","labelName":[{"language":"eng","value":"Phone"}],"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","group":"Phone"},{"id":"email","description":"Email","labelName":[{"language":"eng","value":"Email"}],"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","group":"Email"},{"id":"residenceStatus","description":"Residence Status","labelName":[{"language":"eng","value":"Residence Status"}],"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"ResidenceStatus"},{"id":"referenceIdentityNumber","description":"Reference Identity Number","labelName":[{"language":"eng","value":"Reference Identity Number"}],"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","group":"IDNumber"}]}'
+WHERE id = '1';
+EOF
+
+
+##--> The UI fetches templates/templatetypecodes/consent and gets KER-MSD-046 - Template not found.
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+-- consent template type
+INSERT INTO master.template_type(code, descr, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES ('consent', 'Consent Template', 'eng', TRUE, 'superadmin', NOW(), FALSE)
+ON CONFLICT DO NOTHING;
+
+-- consent template
+INSERT INTO master.template(id, name, descr, file_format_code, file_txt, module_id, module_name, template_typ_code, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES (
+  '4',
+  'Consent Template',
+  'Consent Template',
+  'txt',
+  'I hereby consent to the collection and processing of my personal data for the purpose of pre-registration.',
+  'PREREG',
+  'Pre-Registration',
+  'consent',
+  'eng',
+  TRUE,
+  'superadmin',
+  NOW(),
+  FALSE
+)
+ON CONFLICT DO NOTHING;
+EOF
+
+
+
+
+
+--------------------------> Look To deepseek for new Insert in database Masterdata
 
 ----------------------------------------------------------------------------------------------------------> 2. Keycloak
 # 1. Keycloak Server (version standard Bitnami)
@@ -505,8 +632,30 @@ docker run -d \
   mosipid/kernel-syncdata-service:1.2.0
 
 
+--> kernel-otpmanager-service
+docker run -d \
+  --name kernel-otpmanager-service \
+  --network mosip-network \
+  -p 8085:8085 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://host.docker.internal:51000/config \
+  -e iam_adapter_url_env="http://localhost/skip" \
+  -e artifactory_url_env="http://localhost/skip" \
+  -e is_glowroot_env=notpresent \
+  kernel-otpmanager-custom:1.2.0
 
 
+--> Notification :
+# Create mock notifier
+docker run -d \
+  --name mock-notifier \
+  --network mosip-network \
+  nginx:alpine
+
+docker exec mock-notifier sh -c "printf 'server { listen 80; location / { return 200 \"{\\\"response\\\":{\\\"status\\\":\\\"success\\\"}}\"; add_header Content-Type application/json; } }' > /etc/nginx/conf.d/default.conf && nginx -s reload"
+
+docker exec mock-notifier sh -c "printf 'server { listen 80; location / { default_type application/json; return 200 \"{\\\"response\\\":{\\\"status\\\":\\\"success\\\"},\\\"errors\\\":null}\"; } }' > /etc/nginx/conf.d/default.conf && nginx -s reload"
 
 ----------------------------------------------------------------------------------------------------------> 4. Backend
 - Pull services.
