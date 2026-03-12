@@ -348,9 +348,246 @@ EOF
 
 
 
+##--> Insert gender data:
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+INSERT INTO master.gender(code, name, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES
+('MLE', 'Male', 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('FLE', 'Female', 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('OTH', 'Others', 'eng', TRUE, 'superadmin', NOW(), FALSE)
+ON CONFLICT DO NOTHING;
+EOF
+
+
+
+##--> labelName is an object with language codes as keys (not an array). Update the UI spec in the DB:
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+UPDATE master.ui_spec SET json_spec = '{
+  "identity": {
+    "identity": [
+      {"id":"fullName","description":"Full Name","labelName":{"eng":"Full Name","ara":"الاسم الكامل","fra":"Nom complet"},"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"transliteration":true,"visible":true,"type":"simpleType","alignmentGroup":"row1"},
+      {"id":"dateOfBirth","description":"Date Of Birth","labelName":{"eng":"Date Of Birth","ara":"تاريخ الميلاد","fra":"Date de naissance"},"controlType":"date","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","alignmentGroup":"row2"},
+      {"id":"gender","description":"Gender","labelName":{"eng":"Gender","ara":"الجنس","fra":"Genre"},"controlType":"dropdown","fieldType":"default","format":"","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row2"},
+      {"id":"residenceStatus","description":"Residence Status","labelName":{"eng":"Residence Status","ara":"وضع الإقامة","fra":"Statut de résidence"},"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row2"},
+      {"id":"addressLine1","description":"Address Line1","labelName":{"eng":"Address Line 1","ara":"عنوان السطر 1","fra":"Adresse ligne 1"},"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row3"},
+      {"id":"region","description":"Region","labelName":{"eng":"Region","ara":"المنطقة","fra":"Région"},"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row4"},
+      {"id":"province","description":"Province","labelName":{"eng":"Province","ara":"المقاطعة","fra":"Province"},"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row4"},
+      {"id":"city","description":"City","labelName":{"eng":"City","ara":"المدينة","fra":"Ville"},"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row4"},
+      {"id":"zone","description":"Zone","labelName":{"eng":"Zone","ara":"المنطقة","fra":"Zone"},"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row4"},
+      {"id":"postalCode","description":"Postal Code","labelName":{"eng":"Postal Code","ara":"الرمز البريدي","fra":"Code postal"},"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","alignmentGroup":"row4"},
+      {"id":"phone","description":"Phone","labelName":{"eng":"Phone","ara":"الهاتف","fra":"Téléphone"},"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","alignmentGroup":"row5"},
+      {"id":"email","description":"Email","labelName":{"eng":"Email","ara":"البريد الإلكتروني","fra":"Email"},"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","alignmentGroup":"row5"},
+      {"id":"referenceIdentityNumber","description":"Reference Identity Number","labelName":{"eng":"Reference Identity Number","ara":"رقم الهوية المرجعي","fra":"Numéro d identité de référence"},"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","alignmentGroup":"row6"}
+    ],
+    "locationHierarchy": [["region","province","city","zone","postalCode"]]
+  }
+}'
+WHERE id = '1';
+EOF
+
+
+
+##--> insert gender data for all three languages:
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+INSERT INTO master.gender(code, name, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES
+('MLE', 'ذكر', 'ara', TRUE, 'superadmin', NOW(), FALSE),
+('FLE', 'أنثى', 'ara', TRUE, 'superadmin', NOW(), FALSE),
+('OTH', 'آخر', 'ara', TRUE, 'superadmin', NOW(), FALSE),
+('MLE', 'Homme', 'fra', TRUE, 'superadmin', NOW(), FALSE),
+('FLE', 'Femme', 'fra', TRUE, 'superadmin', NOW(), FALSE),
+('OTH', 'Autre', 'fra', TRUE, 'superadmin', NOW(), FALSE)
+ON CONFLICT DO NOTHING;
+EOF
+
+
+##--> update the UI spec to set fieldType: "dynamic" for gender and residenceStatus:
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+UPDATE master.ui_spec SET json_spec = '{
+  "identity": {
+    "identity": [
+      {"id":"fullName","description":"Full Name","labelName":{"eng":"Full Name","ara":"الاسم الكامل","fra":"Nom complet"},"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"transliteration":true,"visible":true,"type":"simpleType","alignmentGroup":"row1"},
+      {"id":"dateOfBirth","description":"Date Of Birth","labelName":{"eng":"Date Of Birth","ara":"تاريخ الميلاد","fra":"Date de naissance"},"controlType":"date","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","alignmentGroup":"row2"},
+      {"id":"gender","description":"Gender","labelName":{"eng":"Gender","ara":"الجنس","fra":"Genre"},"controlType":"dropdown","fieldType":"dynamic","format":"","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row2","subType":"gender"},
+      {"id":"residenceStatus","description":"Residence Status","labelName":{"eng":"Residence Status","ara":"وضع الإقامة","fra":"Statut de résidence"},"controlType":"dropdown","fieldType":"dynamic","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row2","subType":"residenceStatus"},
+      {"id":"addressLine1","description":"Address Line1","labelName":{"eng":"Address Line 1","ara":"عنوان السطر 1","fra":"Adresse ligne 1"},"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row3"},
+      {"id":"region","description":"Region","labelName":{"eng":"Region","ara":"المنطقة","fra":"Région"},"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row4"},
+      {"id":"province","description":"Province","labelName":{"eng":"Province","ara":"المقاطعة","fra":"Province"},"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row4"},
+      {"id":"city","description":"City","labelName":{"eng":"City","ara":"المدينة","fra":"Ville"},"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row4"},
+      {"id":"zone","description":"Zone","labelName":{"eng":"Zone","ara":"المنطقة","fra":"Zone"},"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","alignmentGroup":"row4"},
+      {"id":"postalCode","description":"Postal Code","labelName":{"eng":"Postal Code","ara":"الرمز البريدي","fra":"Code postal"},"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","alignmentGroup":"row4"},
+      {"id":"phone","description":"Phone","labelName":{"eng":"Phone","ara":"الهاتف","fra":"Téléphone"},"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","alignmentGroup":"row5"},
+      {"id":"email","description":"Email","labelName":{"eng":"Email","ara":"البريد الإلكتروني","fra":"Email"},"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","alignmentGroup":"row5"},
+      {"id":"referenceIdentityNumber","description":"Reference Identity Number","labelName":{"eng":"Reference Identity Number","ara":"رقم الهوية المرجعي","fra":"Numéro d identité de référence"},"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","alignmentGroup":"row6"}
+    ],
+    "locationHierarchy": [["region","province","city","zone","postalCode"]]
+  }
+}'
+WHERE id = '1';
+EOF
+
+
+##--> insert gender and residenceStatus as dynamic fields for all 3 languages:
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+INSERT INTO master.dynamic_field(id, name, description, data_type, value_json, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES
+('1', 'gender', 'Gender', 'string', '[{"code":"MLE","value":"Male"},{"code":"FLE","value":"Female"},{"code":"OTH","value":"Others"}]', 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('2', 'gender', 'Gender', 'string', '[{"code":"MLE","value":"ذكر"},{"code":"FLE","value":"أنثى"},{"code":"OTH","value":"آخر"}]', 'ara', TRUE, 'superadmin', NOW(), FALSE),
+('3', 'gender', 'Gender', 'string', '[{"code":"MLE","value":"Homme"},{"code":"FLE","value":"Femme"},{"code":"OTH","value":"Autre"}]', 'fra', TRUE, 'superadmin', NOW(), FALSE),
+('4', 'residenceStatus', 'Residence Status', 'string', '[{"code":"FR","value":"Foreigner"},{"code":"NFR","value":"Non-Foreigner"}]', 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('5', 'residenceStatus', 'Residence Status', 'string', '[{"code":"FR","value":"أجنبي"},{"code":"NFR","value":"غير أجنبي"}]', 'ara', TRUE, 'superadmin', NOW(), FALSE),
+('6', 'residenceStatus', 'Residence Status', 'string', '[{"code":"FR","value":"Étranger"},{"code":"NFR","value":"Non-étranger"}]', 'fra', TRUE, 'superadmin', NOW(), FALSE)
+ON CONFLICT DO NOTHING;
+EOF
+
+
+##--> value_json as individual JSON objects, not as an array. Each row should have a single {"code":"MLE","value":"Male"} object
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+DELETE FROM master.dynamic_field;
+
+INSERT INTO master.dynamic_field(id, name, description, data_type, value_json, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES
+('1',  'gender', 'Gender', 'string', '{"code":"MLE","value":"Male"}',    'eng', TRUE, 'superadmin', NOW(), FALSE),
+('2',  'gender', 'Gender', 'string', '{"code":"FLE","value":"Female"}',  'eng', TRUE, 'superadmin', NOW(), FALSE),
+('3',  'gender', 'Gender', 'string', '{"code":"OTH","value":"Others"}',  'eng', TRUE, 'superadmin', NOW(), FALSE),
+('4',  'gender', 'Gender', 'string', '{"code":"MLE","value":"ذكر"}',     'ara', TRUE, 'superadmin', NOW(), FALSE),
+('5',  'gender', 'Gender', 'string', '{"code":"FLE","value":"أنثى"}',    'ara', TRUE, 'superadmin', NOW(), FALSE),
+('6',  'gender', 'Gender', 'string', '{"code":"OTH","value":"آخر"}',     'ara', TRUE, 'superadmin', NOW(), FALSE),
+('7',  'gender', 'Gender', 'string', '{"code":"MLE","value":"Homme"}',   'fra', TRUE, 'superadmin', NOW(), FALSE),
+('8',  'gender', 'Gender', 'string', '{"code":"FLE","value":"Femme"}',   'fra', TRUE, 'superadmin', NOW(), FALSE),
+('9',  'gender', 'Gender', 'string', '{"code":"OTH","value":"Autre"}',   'fra', TRUE, 'superadmin', NOW(), FALSE),
+('10', 'residenceStatus', 'Residence Status', 'string', '{"code":"FR","value":"Foreigner"}',     'eng', TRUE, 'superadmin', NOW(), FALSE),
+('11', 'residenceStatus', 'Residence Status', 'string', '{"code":"NFR","value":"Non-Foreigner"}','eng', TRUE, 'superadmin', NOW(), FALSE),
+('12', 'residenceStatus', 'Residence Status', 'string', '{"code":"FR","value":"أجنبي"}',         'ara', TRUE, 'superadmin', NOW(), FALSE),
+('13', 'residenceStatus', 'Residence Status', 'string', '{"code":"NFR","value":"غير أجنبي"}',    'ara', TRUE, 'superadmin', NOW(), FALSE),
+('14', 'residenceStatus', 'Residence Status', 'string', '{"code":"FR","value":"Étranger"}',      'fra', TRUE, 'superadmin', NOW(), FALSE),
+('15', 'residenceStatus', 'Residence Status', 'string', '{"code":"NFR","value":"Non-étranger"}', 'fra', TRUE, 'superadmin', NOW(), FALSE)
+ON CONFLICT DO NOTHING;
+EOF
+
+
+
+
 
 
 --------------------------> Look To deepseek for new Insert in database Masterdata
+
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+INSERT INTO master.loc_hierarchy_list(hierarchy_level, hierarchy_level_name, lang_code, is_active, cr_by, cr_dtimes)
+VALUES
+(0, 'Country', 'eng', TRUE, 'superadmin', NOW()),
+(1, 'Region', 'eng', TRUE, 'superadmin', NOW()),
+(2, 'Province', 'eng', TRUE, 'superadmin', NOW()),
+(3, 'City', 'eng', TRUE, 'superadmin', NOW()),
+(4, 'Zone', 'eng', TRUE, 'superadmin', NOW())
+ON CONFLICT (hierarchy_level, hierarchy_level_name, lang_code) DO NOTHING;
+EOF
+
+
+
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+-- Create the locations table if it doesn't exist
+CREATE TABLE IF NOT EXISTS master.locations (
+    code character varying(36) NOT NULL,
+    name character varying(128) NOT NULL,
+    hierarchy_level smallint NOT NULL,
+    hierarchy_level_name character varying(64) NOT NULL,
+    parent_loc_code character varying(36),
+    lang_code character varying(3) NOT NULL,
+    is_active boolean NOT NULL,
+    cr_by character varying(256) NOT NULL,
+    cr_dtimes timestamp without time zone NOT NULL,
+    upd_by character varying(256),
+    upd_dtimes timestamp without time zone,
+    is_deleted boolean DEFAULT FALSE,
+    del_dtimes timestamp without time zone,
+    CONSTRAINT pk_locc_code PRIMARY KEY (code, lang_code),
+    CONSTRAINT fk_loc_parent FOREIGN KEY (parent_loc_code, lang_code) 
+        REFERENCES master.locations(code, lang_code) MATCH SIMPLE
+);
+
+-- Insert sample location data (adjust based on your country)
+INSERT INTO master.locations(code, name, hierarchy_level, hierarchy_level_name, parent_loc_code, lang_code, is_active, cr_by, cr_dtimes)
+VALUES
+('COUNTRY01', 'My Country', 0, 'Country', NULL, 'eng', TRUE, 'superadmin', NOW()),
+('REGION01', 'North Region', 1, 'Region', 'COUNTRY01', 'eng', TRUE, 'superadmin', NOW()),
+('PROV01', 'Central Province', 2, 'Province', 'REGION01', 'eng', TRUE, 'superadmin', NOW()),
+('CITY01', 'Capital City', 3, 'City', 'PROV01', 'eng', TRUE, 'superadmin', NOW()),
+('ZONE01', 'Downtown Zone', 4, 'Zone', 'CITY01', 'eng', TRUE, 'superadmin', NOW())
+ON CONFLICT (code, lang_code) DO NOTHING;
+
+-- Verify the data was inserted
+SELECT code, name, hierarchy_level, hierarchy_level_name, parent_loc_code 
+FROM master.locations 
+ORDER BY hierarchy_level;
+EOF
+
+
+
+
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+INSERT INTO master.app_detail(id, name, lang_code, is_active, cr_by, cr_dtimes)
+VALUES
+('preregistration', 'Pre-Registration', 'eng', TRUE, 'superadmin', NOW()),
+('registrationclient', 'Registration Client', 'eng', TRUE, 'superadmin', NOW()),
+('resident', 'Resident Services', 'eng', TRUE, 'superadmin', NOW())
+ON CONFLICT (id, lang_code) DO NOTHING;
+EOF
+
+
+
+
+
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+-- Insert zone data
+INSERT INTO master.zone(code, name, hierarchy_level, hierarchy_level_name, hierarchy_path, parent_zone_code, lang_code, is_active, cr_by, cr_dtimes)
+VALUES
+('ZONE01', 'Downtown Zone', 4, 'Zone', 'COUNTRY01.REGION01.PROV01.CITY01.ZONE01', 'CITY01', 'eng', TRUE, 'superadmin', NOW())
+ON CONFLICT (code, lang_code) DO NOTHING;
+
+-- Now insert registration_center (it should work now)
+INSERT INTO master.registration_center(
+    id, name, cntrtyp_code, addr_line1, addr_line2,
+    location_code, contact_phone, contact_person, 
+    number_of_kiosks, working_hours, lang_code, zone_code,
+    is_active, cr_by, cr_dtimes
+)
+VALUES(
+    'RC001', 
+    'Main Registration Center',
+    'REG',
+    '123 Main Street',
+    'Downtown Area', 
+    'COUNTRY01',
+    '1234567890', 
+    'John Doe',
+    5,
+    '9:00 AM - 6:00 PM', 
+    'eng',
+    'ZONE01',
+    TRUE,
+    'superadmin', 
+    NOW()
+)
+ON CONFLICT (id, lang_code) DO NOTHING;
+
+-- Verify all data is now present
+SELECT 'app_detail' as table_name, COUNT(*) FROM master.app_detail
+UNION ALL
+SELECT 'reg_center_type', COUNT(*) FROM master.reg_center_type
+UNION ALL
+SELECT 'registration_center', COUNT(*) FROM master.registration_center
+UNION ALL
+SELECT 'location', COUNT(*) FROM master.location
+UNION ALL
+SELECT 'zone', COUNT(*) FROM master.zone
+UNION ALL
+SELECT 'loc_hierarchy_list', COUNT(*) FROM master.loc_hierarchy_list;
+EOF
+
+
+
+
 
 ----------------------------------------------------------------------------------------------------------> 2. Keycloak
 # 1. Keycloak Server (version standard Bitnami)
