@@ -470,6 +470,60 @@ EOF
 
 
 
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+-- First insert MOR into location
+INSERT INTO master.location(code, name, hierarchy_level, hierarchy_level_name, parent_loc_code, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES
+('MOR', 'Morocco', 0, 'Country', NULL, 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('MOR', 'المغرب', 0, 'Country', NULL, 'ara', TRUE, 'superadmin', NOW(), FALSE),
+('MOR', 'Maroc', 0, 'Country', NULL, 'fra', TRUE, 'superadmin', NOW(), FALSE)
+ON CONFLICT DO NOTHING;
+
+-- Now update registration_center to point to MOR
+UPDATE master.registration_center SET location_code = 'MOR';
+
+-- Now delete COUNTRY01
+DELETE FROM master.location WHERE code = 'COUNTRY01';
+
+-- Insert remaining locations
+INSERT INTO master.location(code, name, hierarchy_level, hierarchy_level_name, parent_loc_code, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
+VALUES
+('REG01', 'North Region', 1, 'Region', 'MOR', 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('REG01', 'المنطقة الشمالية', 1, 'Region', 'MOR', 'ara', TRUE, 'superadmin', NOW(), FALSE),
+('REG01', 'Région Nord', 1, 'Region', 'MOR', 'fra', TRUE, 'superadmin', NOW(), FALSE),
+('PROV01', 'Central Province', 2, 'Province', 'REG01', 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('PROV01', 'المقاطعة المركزية', 2, 'Province', 'REG01', 'ara', TRUE, 'superadmin', NOW(), FALSE),
+('PROV01', 'Province Centrale', 2, 'Province', 'REG01', 'fra', TRUE, 'superadmin', NOW(), FALSE),
+('CITY01', 'Capital City', 3, 'City', 'PROV01', 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('CITY01', 'المدينة العاصمة', 3, 'City', 'PROV01', 'ara', TRUE, 'superadmin', NOW(), FALSE),
+('CITY01', 'Ville Capitale', 3, 'City', 'PROV01', 'fra', TRUE, 'superadmin', NOW(), FALSE),
+('ZONE01', 'Downtown Zone', 4, 'Zone', 'CITY01', 'eng', TRUE, 'superadmin', NOW(), FALSE),
+('ZONE01', 'منطقة وسط المدينة', 4, 'Zone', 'CITY01', 'ara', TRUE, 'superadmin', NOW(), FALSE),
+('ZONE01', 'Zone Centre-ville', 4, 'Zone', 'CITY01', 'fra', TRUE, 'superadmin', NOW(), FALSE)
+ON CONFLICT DO NOTHING;
+EOF
+
+
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+-- Remove orphan REGION01
+DELETE FROM master.location WHERE code = 'REGION01';
+
+-- Fix PROV01 eng parent
+UPDATE master.location SET parent_loc_code = 'REG01' WHERE code = 'PROV01' AND lang_code = 'eng';
+EOF
+
+
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+UPDATE master.identity_schema SET schema_json = '{"$schema":"http://json-schema.org/draft-07/schema#","id":"http://mosip.io/mosip_identity.json","description":"MOSIP Identity Object","additionalProperties":false,"title":"MOSIP Identity","type":"object","definitions":{"simpleType":{"uniqueItems":true,"additionalItems":false,"type":"array","items":{"additionalProperties":false,"type":"object","required":["language","value"],"properties":{"language":{"type":"string"},"value":{"type":"string"}}}},"documentType":{"additionalProperties":false,"type":"object","properties":{"format":{"type":"string"},"type":{"type":"string"},"value":{"type":"string"}}},"biometricsType":{"additionalProperties":false,"type":"object","properties":{"format":{"type":"string"},"version":{"minimum":0,"type":"number"},"value":{"type":"string"}}}},"properties":{"identity":{"additionalProperties":false,"type":"object","required":["fullName","dateOfBirth","gender","addressLine1","region","province","city","zone","postalCode","phone","email","residenceStatus","referenceIdentityNumber"],"properties":{"fullName":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"fullName","description":"Full Name","type":"array","validators":[],"transliteration":true},"dateOfBirth":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","id":"dateOfBirth","description":"Date Of Birth","validators":[]},"gender":{"bioAttributes":[],"fieldCategory":"pvt","format":"","fieldType":"default","$ref":"#/definitions/simpleType","id":"gender","description":"Gender","type":"array","validators":[]},"addressLine1":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"addressLine1","description":"Address Line1","type":"array","validators":[]},"region":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"region","description":"Region","type":"array","validators":[]},"province":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"province","description":"Province","type":"array","validators":[]},"city":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"city","description":"City","type":"array","validators":[]},"zone":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"zone","description":"Zone","type":"array","validators":[]},"postalCode":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","id":"postalCode","description":"Postal Code","validators":[]},"phone":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","id":"phone","description":"Phone","validators":[]},"email":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","id":"email","description":"Email","validators":[]},"residen ceStatus":{"bioAttributes":[],"fieldCategory":"kyc","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","id":"residenceStatus","description":"Residence Status","type":"array","validators":[]},"referenceIdentityNumber":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","id":"referenceIdentityNumber","description":"Reference Identity Number","validators":[]}}}}}' WHERE id = '1';
+EOF
+
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+UPDATE master.identity_schema SET schema_json = '{"$schema":"http://json-schema.org/draft-07/schema#","description":"MOSIP Identity Object","additionalProperties":false,"title":"MOSIP Identity","type":"object","definitions":{"simpleType":{"uniqueItems":true,"additionalItems":false,"type":"array","items":{"additionalProperties":false,"type":"object","required":["language","value"],"properties":{"language":{"type":"string"},"value":{"type":"string"}}}},"documentType":{"additionalProperties":false,"type":"object","properties":{"format":{"type":"string"},"type":{"type":"string"},"value":{"type":"string"}}},"biometricsType":{"additionalProperties":false,"type":"object","properties":{"format":{"type":"string"},"version":{"minimum":0,"type":"number"},"value":{"type":"string"}}}},"properties":{"identity":{"additionalProperties":false,"type":"object","required":["fullName","dateOfBirth","gender","addressLine1","region","province","city","zone","postalCode","phone","email","residenceStatus","referenceIdentityNumber"],"properties":{"fullName":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","description":"Full Name","validators":[],"transliteration":true},"dateOfBirth":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","description":"Date Of Birth","validators":[]},"gender":{"bioAttributes":[],"fieldCategory":"pvt","format":"","fieldType":"default","$ref":"#/definitions/simpleType","description":"Gender","validators":[]},"addressLine1":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","description":"Address Line1","validators":[]},"region":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","description":"Region","validators":[]},"province":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","description":"Province","validators":[]},"city":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","description":"City","validators":[]},"zone":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","description":"Zone","validators":[]},"postalCode":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","description":"Postal Code","validators":[]},"phone":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","description":"Phone","validators":[]},"email":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","description":"Email","validators":[]},"residenceStatus":{"bioAttributes":[],"fieldCategory":"kyc","format":"none","fieldType":"default","$ref":"#/definitions/simpleType","description":"Residence Status","validators":[]},"referenceIdentityNumber":{"bioAttributes":[],"fieldCategory":"pvt","format":"none","fieldType":"default","type":"string","description":"Reference Identity Number","validators":[]}}}}}' WHERE id = '1';
+EOF
+
+
+
+
 --------------------------> Look To deepseek for new Insert in database Masterdata
 
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
@@ -881,6 +935,19 @@ docker run -d \
   -e artifactory_url_env="http://localhost/skip" \
   -e is_glowroot_env=notpresent \
   kernel-otpmanager-custom:1.2.0
+
+
+--> kernel-pridgenerator-service:1.2.0
+docker cp /c/Users/olaghjibi/MOSIP/jars/kernel-auth-adapter-1.2.0.jar file-server:/usr/share/nginx/html/kernel-auth-adapter.jar
+docker rm -f kernel-pridgenerator-service 2>/dev/null; \
+docker run -d --name kernel-pridgenerator-service --network mosip-network -p 8100:8100 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://host.docker.internal:51000/config \
+  -e iam_adapter_url_env=http://file-server/kernel-auth-adapter.jar \
+  -e artifactory_url_env="http://localhost/skip" \
+  -e is_glowroot_env=notpresent \
+  mosipid/kernel-pridgenerator-service:1.2.0
 
 
 --> Notification :

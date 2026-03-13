@@ -1,0 +1,6 @@
+FROM mosipid/kernel-pridgenerator-service:1.2.0
+USER root
+RUN mkdir -p /home/mosip/additional_jars
+COPY jars/kernel-auth-adapter-1.2.0.jar /home/mosip/additional_jars/kernel-auth-adapter.jar
+RUN chmod 644 /home/mosip/additional_jars/kernel-auth-adapter.jar
+USER 1001:1001
