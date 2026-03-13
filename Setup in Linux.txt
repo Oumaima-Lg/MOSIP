@@ -1,0 +1,75 @@
+----------------------------------------------------------------------------------------------------------> 1. Database :
+docker login
+sudo usermod -aG docker mosip
+newgrp docker
+
+docker pull postgres:10
+docker network create mosip-network
+docker run -d \
+  --name postgres \
+  --network mosip-network \
+  -p 5432:5432 \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=mosip123 \
+  -v pgdata:/var/lib/postgresql/data \
+  postgres:10
+
+docker pull mosipid/postgres-init:1.2.0
+databases=(
+    "mosip_master"
+    "mosip_audit"
+    "mosip_kernel"
+    "mosip_keymgr"
+    "mosip_regprc"
+    "mosip_prereg"
+)
+# Boucle à travers chaque base
+for db in "${databases[@]}"; do
+    echo "========================================="
+    echo "🔄 Initialisation de $db..."
+    echo "========================================="
+    docker run --rm \
+      --network mosip-network \
+      -e DB_SERVERIP=postgres \
+      -e DB_PORT=5432 \
+      -e SU_USER=postgres \
+      -e SU_USER_PWD=mosip123 \
+      -e DEFAULT_DB_NAME=postgres \
+      -e DBUSER_PWD=mosip123 \
+      -e MOSIP_DB_NAME="$db" \
+      mosipid/postgres-init:1.2.0
+    if [ $? -eq 0 ]; then
+        echo "✅ Initialisation de $db réussie !"
+    else
+        echo "❌ Erreur lors de l'initialisation de $db"
+        exit 1
+    fi
+    echo ""
+    sleep 2  # Pause de 2 secondes entre chaque initialisation
+done
+
+
+----------------------------------------------------------------------------------------------------------> 2. Keycloak
+docker pull mosipid/mosip-keycloak:1.2.0
+docker pull mosipid/keycloak-init:1.2.0
+
+docker exec -it postgres bash
+psql -U postgres -c "CREATE DATABASE mosip_keycloak;"
+psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE mosip_keycloak TO postgres;"
+exit
+
+docker run -d \
+  --name keycloak \
+  --network mosip-network \
+  -p 8080:8080 \
+  -e DB_VENDOR=postgres \
+  -e DB_ADDR=postgres \
+  -e DB_PORT=5432 \
+  -e DB_DATABASE=mosip_keycloak \
+  -e DB_USER=postgres \
+  -e DB_PASSWORD=mosip123 \
+  -e KEYCLOAK_USER=admin \
+  -e KEYCLOAK_PASSWORD=mosip123 \
+  -e PROXY_ADDRESS_FORWARDING=true \
+  -v keycloak_data:/opt/jboss/keycloak/standalone/data \
+  mosipid/mosip-keycloak:1.2.0

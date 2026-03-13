@@ -48,7 +48,7 @@ PostgreSQL: 10.2
 execute the required SQL scripts to initialize the database.
 
 # 1. Puller l'image PostgreSQL
-docker pull postgres:10.2
+docker pull postgres:10
 
 # Créer le réseau Docker commun
 docker network create mosip-network
@@ -162,7 +162,7 @@ for db in "${databases[@]}"; do
     sleep 2  # Pause de 2 secondes entre chaque initialisation
 done
 
-echo "🎉 Toutes les bases ont été initialisées avec succès !"
+
 
 
 # Liste toutes les bases maintenant
