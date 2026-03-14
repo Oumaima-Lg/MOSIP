@@ -1,3 +1,11 @@
+----------------------------------------------------------------------------------------------------------> Demo
+**Keycloak:
+	http://172.19.34.65:8080/
+	Credentials: admin / mosip123
+
+---------------------------------------------------------------------------------------------------------->  Depo
+git clone http://172.18.37.25:8010/egov/version-clients/mx-id-mosip.git
+
 ----------------------------------------------------------------------------------------------------------> 1. Database :
 docker login
 sudo usermod -aG docker mosip
@@ -73,3 +81,105 @@ docker run -d \
   -e PROXY_ADDRESS_FORWARDING=true \
   -v keycloak_data:/opt/jboss/keycloak/standalone/data \
   mosipid/mosip-keycloak:1.2.0
+
+docker run --rm -it \
+  --name keycloak-init \
+  --network mosip-network \
+  -v /home/mosip/mx-id-mosip/keycloak-init-config:/opt/mosip/input \
+  --env-file /home/mosip/mx-id-mosip/keycloak-init-config/.env \
+  -e KEYCLOAK_ADMIN_USER=admin \
+  -e KEYCLOAK_ADMIN_PASSWORD=mosip123 \
+  -e KEYCLOAK_SERVER_URL=http://keycloak:8080 \
+  mosipid/keycloak-init:1.2.0
+
+
+----------------------------------------------------------------------------------------------------------> 3. Config Server
+cd mx-id-mosip/config-server/
+chmod +x config-server-start.sh
+./config-server-start.sh
+
+
+----------------------------------------------------------------------------------------------------------> 4. Kernel
+docker run -d \
+  --name kernel-auth-service \
+  --network mosip-network \
+  -p 8091:8091 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://172.19.34.65:51000/config \
+  -e iam_adapter_url_env="https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar" \
+  -e is_glowroot_env=notpresent \
+  mosipid/kernel-auth-service:1.2.0
+
+docker run -d \
+  --name kernel-auditmanager-service \
+  --network mosip-network \
+  -p 8082:8081 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://172.19.34.65:51000/config \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  -e is_glowroot_env=notpresent \
+  mosipid/kernel-auditmanager-service:1.2.0
+
+docker run -d \
+  --name kernel-masterdata-service \
+  --network mosip-network \
+  -p 8086:8086 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://172.19.34.65:51000/config \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  -e is_glowroot_env=notpresent \
+  mosipid/kernel-masterdata-service:1.2.0
+
+docker run -d \
+  --name kernel-pridgenerator-service \
+  --network mosip-network \
+  -p 8100:8100 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://172.19.34.65:51000/config \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  -e is_glowroot_env=notpresent \
+  mosipid/kernel-pridgenerator-service:1.2.0
+
+docker run -d \
+  --name kernel-otpmanager-service \
+  --network mosip-network \
+  -p 8085:8085 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://172.19.34.65:51000/config \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  -e is_glowroot_env=notpresent \
+  mosipid/kernel-otpmanager-service:1.2.0
+
+docker run -d \
+  --name mock-notifier \
+  --network mosip-network \
+  nginx:alpine
+docker exec mock-notifier sh -c "printf 'server { listen 80; location / { default_type application/json; return 200 \"{\\\"response\\\":{\\\"status\\\":\\\"success\\\"},\\\"errors\\\":null}\"; } }' > /etc/nginx/conf.d/default.conf && nginx -s reload"
+
+
+----------------------------------------------------------------------------------------------------------> 5. Pre-registration Services
+cd mx-id-mosip
+docker build -t pre-reg-custom:1.2.0 .
+docker run -d \
+  --name pre-registration-application-service \
+  --network mosip-network \
+  -p 9090:9090 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://172.19.34.65:51000/config \
+  -e iam_adapter_url_env="http://localhost/skip" \
+  -e artifactory_url_env="http://localhost/skip" \
+  -e virusscanner_url_env="http://localhost/skip" \
+  -e is_glowroot_env=notpresent \
+  pre-reg-custom:1.2.0
+
+
+
+
+
+

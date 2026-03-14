@@ -1,0 +1,14 @@
+FROM mosipid/kernel-keymanager-service:1.2.0
+USER root
+RUN apt-get update && apt-get install -y softhsm2 && \
+    mkdir -p /var/lib/softhsm/tokens && \
+    mkdir -p /config /home/mosip/additional_jars /home/mosip/hsm-lib && \
+    mkdir -p /home/mosip/.config/softhsm2 && \
+    echo 'directories.tokendir = /var/lib/softhsm/tokens' > /home/mosip/.config/softhsm2/softhsm2.conf && \
+    echo 'objectstore.backend = file' >> /home/mosip/.config/softhsm2/softhsm2.conf && \
+    chown -R 1001:1001 /home/mosip /var/lib/softhsm /config
+COPY softhsm-application.conf /config/softhsm-application.conf
+RUN sed -i 's/sudo \.\/install\.sh/\.\/install\.sh/g' /home/mosip/configure_start.sh && \
+    sed -i 's/mkdir "\"/rm -rf "\" \&\& mkdir "\"/g' /home/mosip/configure_start.sh
+USER 1001:1001
+RUN softhsm2-util --init-token --slot 0 --label "keymanager" --pin 1234 --so-pin 1234
