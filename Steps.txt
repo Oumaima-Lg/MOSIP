@@ -189,7 +189,7 @@ ON CONFLICT DO NOTHING;
 "
 
 
--------------- YES
+-------------- YES  (DONE)
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 INSERT INTO master.doc_category(code, name, descr, lang_code, is_active, cr_by, cr_dtimes, upd_by, upd_dtimes, is_deleted, del_dtimes) VALUES
 ('POI','Proof of Identity','Identity Proof','eng',TRUE,'superadmin',TIMESTAMP '2018-12-10 11:42:52.994',NULL,NULL,NULL,NULL),
@@ -224,6 +224,7 @@ docker exec -it postgres psql -U postgres -d mosip_master -c "SELECT COUNT(*) FR
 
 
 # Issues :
+---------------------------------  
 ##--> The email template OTP-email-subject-template is not found in the database — returns null, causing NPE. Insert the missing templates:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 INSERT INTO master.template(id, name, descr, file_format_code, model, file_txt, module_id, module_name, template_type_code, lang_code, is_active, cr_by, cr_dtimes, upd_by, upd_dtimes, is_deleted, del_dtimes)
@@ -234,6 +235,7 @@ VALUES
 ON CONFLICT DO NOTHING;
 EOF
 
+---------------------------------  
 ##--> Both reference tables are empty — we need to insert into them first. Let's insert everything in the correct order:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 -- 1. Template file format
@@ -259,6 +261,7 @@ ON CONFLICT DO NOTHING;
 EOF
 
 
+---------------------------------  
 ##-->The master.language table is empty. The service first validates the language code and returns null when not found. Insert the languages:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 INSERT INTO master.language(code, name, native_name, is_active, cr_by, cr_dtimes, is_deleted)
@@ -270,6 +273,7 @@ ON CONFLICT DO NOTHING;
 EOF
 
 
+---------------------------------  (DONE)
 ##-->Both tables are empty. We need to insert an identity schema first, then a UI spec. Let me insert a minimal but valid one:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 -- 1. Insert identity schema
@@ -312,13 +316,14 @@ VALUES (
 EOF
 
 
+---------------------------------  (DONE)
 ##--> update the json_spec in the database to be a plain object with identity directly at the top level:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 UPDATE master.ui_spec SET json_spec = '{"identity":[{"id":"fullName","description":"Full Name","labelName":[{"language":"eng","value":"Full Name"}],"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"transliteration":true,"visible":true,"type":"string","group":"FullName","alignmentGroup":"FullName"},{"id":"dateOfBirth","description":"Date Of Birth","labelName":[{"language":"eng","value":"Date Of Birth"}],"controlType":"date","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","group":"DateOfBirth"},{"id":"gender","description":"Gender","labelName":[{"language":"eng","value":"Gender"}],"controlType":"dropdown","fieldType":"default","format":"","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"Gender"},{"id":"addressLine1","description":"Address Line1","labelName":[{"language":"eng","value":"Address Line 1"}],"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"Address"},{"id":"region","description":"Region","labelName":[{"language":"eng","value":"Region"}],"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"Address"},{"id":"province","description":"Province","labelName":[{"language":"eng","value":"Province"}],"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"Address"},{"id":"city","description":"City","labelName":[{"language":"eng","value":"City"}],"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"Address"},{"id":"zone","description":"Zone","labelName":[{"language":"eng","value":"Zone"}],"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"Address"},{"id":"postalCode","description":"Postal Code","labelName":[{"language":"eng","value":"Postal Code"}],"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","group":"Address"},{"id":"phone","description":"Phone","labelName":[{"language":"eng","value":"Phone"}],"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","group":"Phone"},{"id":"email","description":"Email","labelName":[{"language":"eng","value":"Email"}],"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","group":"Email"},{"id":"residenceStatus","description":"Residence Status","labelName":[{"language":"eng","value":"Residence Status"}],"controlType":"dropdown","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"simpleType","group":"ResidenceStatus"},{"id":"referenceIdentityNumber","description":"Reference Identity Number","labelName":[{"language":"eng","value":"Reference Identity Number"}],"controlType":"textbox","fieldType":"default","format":"none","validators":[],"bioAttributes":[],"required":true,"inputRequired":true,"visible":true,"type":"string","group":"IDNumber"}]}'
 WHERE id = '1';
 EOF
 
-
+---------------------------------  
 ##--> The UI fetches templates/templatetypecodes/consent and gets KER-MSD-046 - Template not found.
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 -- consent template type
@@ -348,6 +353,7 @@ EOF
 
 
 
+--------------------------------- 
 ##--> Insert gender data:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 INSERT INTO master.gender(code, name, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
@@ -360,6 +366,7 @@ EOF
 
 
 
+---------------------------------  (DONE)
 ##--> labelName is an object with language codes as keys (not an array). Update the UI spec in the DB:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 UPDATE master.ui_spec SET json_spec = '{
@@ -386,7 +393,7 @@ WHERE id = '1';
 EOF
 
 
-
+---------------------------------  
 ##--> insert gender data for all three languages:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 INSERT INTO master.gender(code, name, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
@@ -401,6 +408,8 @@ ON CONFLICT DO NOTHING;
 EOF
 
 
+
+---------------------------------  
 ##--> update the UI spec to set fieldType: "dynamic" for gender and residenceStatus:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 UPDATE master.ui_spec SET json_spec = '{
@@ -427,6 +436,7 @@ WHERE id = '1';
 EOF
 
 
+---------------------------------  (DONE)
 ##--> insert gender and residenceStatus as dynamic fields for all 3 languages:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 INSERT INTO master.dynamic_field(id, name, description, data_type, value_json, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
@@ -441,6 +451,7 @@ ON CONFLICT DO NOTHING;
 EOF
 
 
+---------------------------------  (DONE)
 ##--> value_json as individual JSON objects, not as an array. Each row should have a single {"code":"MLE","value":"Male"} object
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 DELETE FROM master.dynamic_field;
@@ -469,7 +480,7 @@ EOF
 
 
 
-
+---------------------------------  (DONE)
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 -- First insert MOR into location
 INSERT INTO master.location(code, name, hierarchy_level, hierarchy_level_name, parent_loc_code, lang_code, is_active, cr_by, cr_dtimes, is_deleted)
@@ -526,6 +537,7 @@ EOF
 
 --------------------------> Look To deepseek for new Insert in database Masterdata
 
+---------------------------------  (DONE)
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 INSERT INTO master.loc_hierarchy_list(hierarchy_level, hierarchy_level_name, lang_code, is_active, cr_by, cr_dtimes)
 VALUES
@@ -538,7 +550,7 @@ ON CONFLICT (hierarchy_level, hierarchy_level_name, lang_code) DO NOTHING;
 EOF
 
 
-
+---------------------------------  (DONE)
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 -- Create the locations table if it doesn't exist
 CREATE TABLE IF NOT EXISTS master.locations (
@@ -560,6 +572,7 @@ CREATE TABLE IF NOT EXISTS master.locations (
         REFERENCES master.locations(code, lang_code) MATCH SIMPLE
 );
 
+---------------------------------  (DONE)
 -- Insert sample location data (adjust based on your country)
 INSERT INTO master.locations(code, name, hierarchy_level, hierarchy_level_name, parent_loc_code, lang_code, is_active, cr_by, cr_dtimes)
 VALUES
@@ -578,7 +591,7 @@ EOF
 
 
 
-
+---------------------------------  
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 INSERT INTO master.app_detail(id, name, lang_code, is_active, cr_by, cr_dtimes)
 VALUES
@@ -591,7 +604,7 @@ EOF
 
 
 
-
+---------------------------------  (DONE)
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 -- Insert zone data
 INSERT INTO master.zone(code, name, hierarchy_level, hierarchy_level_name, hierarchy_path, parent_zone_code, lang_code, is_active, cr_by, cr_dtimes)
@@ -978,6 +991,7 @@ application-default.properties
 kernel-keymanager-service-default.properties
 softhsm-application.conf
 kernel-default.properties
+patch_configure.py
 Dockerfile.keymanager
 
 docker pull mosipid/softhsm:v2
@@ -1023,7 +1037,6 @@ docker cp C:\Users\olaghjibi\MOSIP\client.zip file-server:/usr/share/nginx/html/
 
 
 
-docker rm -f kernel-keymanager-service; \
 docker run -d --name kernel-keymanager-service --network mosip-network -p 8088:8088 \
   -e active_profile_env=default \
   -e spring_config_label_env=master \
@@ -1034,6 +1047,24 @@ docker run -d --name kernel-keymanager-service --network mosip-network -p 8088:8
   -e is_glowroot_env=notpresent \
   kernel-keymanager-custom:1.2.0
 
+
+
+
+--------------------------------------- minio 
+docker run -d --name minio \
+  --network mosip-network \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  -e MINIO_ROOT_USER=minioadmin \
+  -e MINIO_ROOT_PASSWORD=minioadmin123 \
+  -v minio-data:/data \
+  minio/minio server /data --console-address ":9001"
+
+# Wait a few seconds for MinIO to start, then create the prereg bucket
+docker exec minio mc alias set local http://localhost:9000 minioadmin minioadmin123
+docker exec minio mc mb local/prereg
+
+pre-registration-default.properties
 
 
 ----------------------------------------------------------------------------------------------------------> 4. Backend
@@ -1401,4 +1432,23 @@ docker cp /c/Users/olaghjibi/MOSIP/keymanager/db_scripts/mosip_keymgr/dml/keymgr
 docker cp /c/Users/olaghjibi/MOSIP/keymanager/db_scripts/mosip_keymgr/dml/keymgr-key_policy_def_h.csv postgres:/tmp/
 
 docker exec -i postgres psql -U postgres -d mosip_keymgr -c "\COPY keymgr.key_policy_def (app_id,key_validity_duration,is_active,cr_by,cr_dtimes,pre_expire_days,access_allowed) FROM '/tmp/keymgr-key_policy_def.csv' delimiter ',' HEADER csv;"
+
+
+
+
+pre-registration-default.properties
+mosip-data-release-1.2.0
+import_masterdata.py
+FILES Import
+
+py -m pip install pandas sqlalchemy psycopg2-binary openpyxl
+py C:\Users\olaghjibi\MOSIP\import_masterdata.py
+
+
+py C:\Users\olaghjibi\MOSIP\import_01_documents.py   # doc_category, doc_type, valid_document, applicant_valid_document
+py C:\Users\olaghjibi\MOSIP\import_02_location.py    # loc_hierarchy_list, location, loc_holiday
+py C:\Users\olaghjibi\MOSIP\import_03_id_schema.py   # identity_schema, dynamic_field, id_type, ui_spec
+py C:\Users\olaghjibi\MOSIP\import_05_others.py      # blocklisted_words, daysofweek_list, module_detail, process_list, status_list, status_type, title, zone, zone_user, zone_user_h  
+py C:\Users\olaghjibi\MOSIP\import_04_registration_center.py    # reg_center_type, registration_center, registration_center_h, reg_exceptional_holiday, reg_working_nonworking
+
 

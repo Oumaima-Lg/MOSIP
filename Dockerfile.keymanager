@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y softhsm2 && \
     echo 'objectstore.backend = file' >> /home/mosip/.config/softhsm2/softhsm2.conf && \
     chown -R 1001:1001 /home/mosip /var/lib/softhsm /config
 COPY softhsm-application.conf /config/softhsm-application.conf
-RUN sed -i 's/sudo \.\/install\.sh/\.\/install\.sh/g' /home/mosip/configure_start.sh && \
-    sed -i 's/mkdir "\"/rm -rf "\" \&\& mkdir "\"/g' /home/mosip/configure_start.sh
+COPY patch_configure.py /tmp/patch_configure.py
+RUN python3 /tmp/patch_configure.py
 USER 1001:1001
 RUN softhsm2-util --init-token --slot 0 --label "keymanager" --pin 1234 --so-pin 1234
