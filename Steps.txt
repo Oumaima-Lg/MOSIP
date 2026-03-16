@@ -986,6 +986,8 @@ docker exec mock-notifier sh -c "printf 'server { listen 80; location / { return
 docker exec mock-notifier sh -c "printf 'server { listen 80; location / { default_type application/json; return 200 \"{\\\"response\\\":{\\\"status\\\":\\\"success\\\"},\\\"errors\\\":null}\"; } }' > /etc/nginx/conf.d/default.conf && nginx -s reload"
 
 
+
+
 --> kernel-keymanager-service
 application-default.properties
 kernel-keymanager-service-default.properties
@@ -1179,6 +1181,8 @@ docker logs -f pre-registration-datasync-service 2>&1 | grep -E "Started|ERROR|E
 
 -> pre-registration-batchjob:1.2.0
 docker pull mosipid/pre-registration-batchjob:1.2.0
+
+pre-registration-batchjob-default.properties
 
 cd C:\Users\olaghjibi\MOSIP
 
@@ -1450,5 +1454,5 @@ py C:\Users\olaghjibi\MOSIP\import_02_location.py    # loc_hierarchy_list, locat
 py C:\Users\olaghjibi\MOSIP\import_03_id_schema.py   # identity_schema, dynamic_field, id_type, ui_spec
 py C:\Users\olaghjibi\MOSIP\import_05_others.py      # blocklisted_words, daysofweek_list, module_detail, process_list, status_list, status_type, title, zone, zone_user, zone_user_h  
 py C:\Users\olaghjibi\MOSIP\import_04_registration_center.py    # reg_center_type, registration_center, registration_center_h, reg_exceptional_holiday, reg_working_nonworking
-
+py C:\Users\olaghjibi\MOSIP\import_06_templates.py   # template_file_format, template_type, template
 
