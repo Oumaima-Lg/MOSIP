@@ -18,7 +18,7 @@ Serveur Keycloak (ne change pas entre v1.2.x et v1.3.x, c'est toujours
 Keycloak 16.1.1 avec les thèmes MOSIP)
 
 
------------------------> Prérequis sur mon VPS : (
+-----------------------> Prérequis sur mon VPS : 
 # JDK 11
 sudo apt install openjdk-11-jdk -y
 java -version
@@ -224,7 +224,7 @@ docker exec -it postgres psql -U postgres -d mosip_master -c "SELECT COUNT(*) FR
 
 
 # Issues :
----------------------------------  
+---------------------------------  (DONE)
 ##--> The email template OTP-email-subject-template is not found in the database — returns null, causing NPE. Insert the missing templates:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 INSERT INTO master.template(id, name, descr, file_format_code, model, file_txt, module_id, module_name, template_type_code, lang_code, is_active, cr_by, cr_dtimes, upd_by, upd_dtimes, is_deleted, del_dtimes)
@@ -235,7 +235,7 @@ VALUES
 ON CONFLICT DO NOTHING;
 EOF
 
----------------------------------  
+--------------------------------- (DONE)
 ##--> Both reference tables are empty — we need to insert into them first. Let's insert everything in the correct order:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 -- 1. Template file format
@@ -409,7 +409,7 @@ EOF
 
 
 
----------------------------------  
+---------------------------------  (DONE)
 ##--> update the UI spec to set fieldType: "dynamic" for gender and residenceStatus:
 docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
 UPDATE master.ui_spec SET json_spec = '{
@@ -1038,6 +1038,7 @@ docker cp softhsm:/tmp/client.zip C:\Users\olaghjibi\MOSIP\client.zip
 docker cp C:\Users\olaghjibi\MOSIP\client.zip file-server:/usr/share/nginx/html/client.zip
 
 
+docker build -f Dockerfile.keymanager -t kernel-keymanager-custom:1.2.0 .
 
 docker run -d --name kernel-keymanager-service --network mosip-network -p 8088:8088 \
   -e active_profile_env=default \
@@ -1049,6 +1050,19 @@ docker run -d --name kernel-keymanager-service --network mosip-network -p 8088:8
   -e is_glowroot_env=notpresent \
   kernel-keymanager-custom:1.2.0
 
+
+TOKEN=$(docker exec kernel-keymanager-service curl -s -X POST "http://keycloak:8080/auth/realms/mosip/protocol/openid-connect/token" \
+  -d "client_id=mosip-admin-client&client_secret=mosip123&grant_type=client_credentials" | py -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+docker exec kernel-keymanager-service curl -s -X POST "http://localhost:8088/v1/keymanager/generateMasterKey/certificate" \
+  -H "Cookie: Authorization=$TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"io.mosip.kernel.generateMasterKey","version":"1.0","requesttime":"2026-03-14T00:00:00.000Z","request":{"applicationId":"ROOT","referenceId":"","force":false}}'
+
+docker exec kernel-keymanager-service curl -s -X POST "http://localhost:8088/v1/keymanager/generateMasterKey/certificate" \
+  -H "Cookie: Authorization=$TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"io.mosip.kernel.generateMasterKey","version":"1.0","requesttime":"2026-03-14T00:00:00.000Z","request":{"applicationId":"PRE_REGISTRATION","referenceId":"","force":false}}'
 
 
 
@@ -1135,8 +1149,8 @@ FROM mosipid/pre-registration-booking-service:1.2.0
 COPY jars/kernel-auth-adapter-1.2.0.jar /home/mosip/additional_jars/kernel-auth-adapter.jar
 COPY jars/kernel-ref-idobjectvalidator-1.2.0.jar /home/mosip/additional_jars/kernel-ref-idobjectvalidator.jar
 "@ | Set-Content "Dockerfile.booking"
-docker build -t pre-reg-booking-custom:1.2.0 -f Dockerfile.booking .
 
+docker build -t pre-reg-booking-custom:1.2.0 -f Dockerfile.booking .
 
 docker run -d \
   --name pre-registration-booking-service \
@@ -1455,4 +1469,5 @@ py C:\Users\olaghjibi\MOSIP\import_03_id_schema.py   # identity_schema, dynamic_
 py C:\Users\olaghjibi\MOSIP\import_05_others.py      # blocklisted_words, daysofweek_list, module_detail, process_list, status_list, status_type, title, zone, zone_user, zone_user_h  
 py C:\Users\olaghjibi\MOSIP\import_04_registration_center.py    # reg_center_type, registration_center, registration_center_h, reg_exceptional_holiday, reg_working_nonworking
 py C:\Users\olaghjibi\MOSIP\import_06_templates.py   # template_file_format, template_type, template
-
+py C:\Users\olaghjibi\MOSIP\import_07_language_gender.py
+py C:\Users\olaghjibi\MOSIP\import_08_app_detail_role_priority.py
