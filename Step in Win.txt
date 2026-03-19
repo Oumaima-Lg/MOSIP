@@ -317,3 +317,135 @@ docker run -d \
 docker cp C:/Users/olaghjibi/MOSIP/custom-config/config.json pre-reg-ui:/usr/share/nginx/html/assets/config.json
 docker cp C:/Users/olaghjibi/MOSIP/nginx-proxy/default.conf mosip-proxy:/etc/nginx/conf.d/default.conf
 docker exec mosip-proxy nginx -s reload
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------> kernel-syncdata-service
+syncdata-default.properties
+
+docker run -d --name kernel-syncdata-service \
+  --network mosip-network \
+  -p 8089:8089 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://host.docker.internal:51000/config \
+  -e is_glowroot_env=absent \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  mosipid/kernel-syncdata-service:1.2.0
+
+
+----------------------------------------------------------------------------------------------------------> pgadmin
+docker run -d \
+  --name pgadmin \
+  --network mosip-network \
+  -p 5050:80 \
+  -e PGADMIN_DEFAULT_EMAIL=admin@admin.com \
+  -e PGADMIN_DEFAULT_PASSWORD=admin \
+  dpage/pgadmin4
+
+"Servers" → "Register" → "Server…"
+General -> Connection Name : MOSIP
+Connection -> Host name/address : postgres (Container Name), Username : postgres, Password : mosip123, "Save password?"
+
+----------------------------------------------------------------------------------------------------------> mosip_master DB
+admin-services-release-1.2.0
+
+docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
+TRUNCATE TABLE master.screen_authorization CASCADE;
+TRUNCATE TABLE master.screen_detail CASCADE;
+TRUNCATE TABLE master.app_authentication_method CASCADE;
+TRUNCATE TABLE master.app_role_priority CASCADE;
+TRUNCATE TABLE master.biometric_attribute CASCADE;
+TRUNCATE TABLE master.biometric_type CASCADE;
+TRUNCATE TABLE master.authentication_method CASCADE;
+TRUNCATE TABLE master.reason_list CASCADE;
+TRUNCATE TABLE master.status_list CASCADE;
+TRUNCATE TABLE master.sync_job_def CASCADE;
+TRUNCATE TABLE master.template CASCADE;
+TRUNCATE TABLE master.app_detail CASCADE;
+TRUNCATE TABLE master.module_detail CASCADE;
+TRUNCATE TABLE master.process_list CASCADE;
+TRUNCATE TABLE master.reason_category CASCADE;
+TRUNCATE TABLE master.role_list CASCADE;
+TRUNCATE TABLE master.status_type CASCADE;
+TRUNCATE TABLE master.template_file_format CASCADE;
+TRUNCATE TABLE master.template_type CASCADE;
+TRUNCATE TABLE master.daysofweek_list CASCADE;
+TRUNCATE TABLE master.gender CASCADE;
+TRUNCATE TABLE master.doc_category CASCADE;
+EOF
+
+docker exec -i postgres bash -c "cd /tmp && psql -U postgres -d mosip_master -f dml.sql"
+
+
+----------------------------------------------------------------------------------------------------------> mosip_hotlist db
+
+databases=(
+    "mosip_hotlist"
+)
+
+for db in "${databases[@]}"; do
+    echo "========================================="
+    echo "🔄 Initialisation de $db..."
+    echo "========================================="
+    docker run --rm \
+      --network mosip-network \
+      -e DB_SERVERIP=postgres \
+      -e DB_PORT=5432 \
+      -e SU_USER=postgres \
+      -e SU_USER_PWD=mosip123 \
+      -e DEFAULT_DB_NAME=postgres \
+      -e DBUSER_PWD=mosip123 \
+      -e MOSIP_DB_NAME="$db" \
+      mosipid/postgres-init:1.2.0
+    if [ $? -eq 0 ]; then
+        echo "✅ Initialisation de $db réussie !"
+    else
+        echo "❌ Erreur lors de l'initialisation de $db"
+        exit 1
+    fi
+    sleep 2
+done
+
+----------------------------------------------------------------------------------------------------------> websub-service 
+
+
+----------------------------------------------------------------------------------------------------------> hotlist-service
+
+hotlist-default.properties
+
+docker run -d --name hotlist-service \
+  --network mosip-network \
+  -p 8095:8095 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://host.docker.internal:51000/config \
+  -e is_glowroot_env=absent \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  mosipid/hotlist-service:1.2.0
+
+
+----------------------------------------------------------------------------------------------------------> admin-service
+
+admin-default.properties
+
+docker run -d --name admin-service \
+  --network mosip-network \
+  -p 8098:8098 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://host.docker.internal:51000/config \
+  -e is_glowroot_env=absent \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  mosipid/admin-service:1.2.0
+
+
+----------------------------------------------------------------------------------------------------------> admin-ui
+
+docker run -d --name artifactory-server \
+  --network mosip-network \
+  -p 8084:80 \
+  mosipid/artifactory-server:1.2.0

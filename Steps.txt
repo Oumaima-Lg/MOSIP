@@ -1471,3 +1471,15 @@ py C:\Users\olaghjibi\MOSIP\import_04_registration_center.py    # reg_center_typ
 py C:\Users\olaghjibi\MOSIP\import_06_templates.py   # template_file_format, template_type, template
 py C:\Users\olaghjibi\MOSIP\import_07_language_gender.py
 py C:\Users\olaghjibi\MOSIP\import_08_app_detail_role_priority.py
+
+
+
+
+
+
+
+
+
+
+
+https://github.com/mosip/commons/blob/master/StartKernelCoreComponents_instructions.md

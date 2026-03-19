@@ -224,7 +224,6 @@ TOKEN=$(docker exec kernel-auth-service curl -s -X POST \
 
 | Issue | Status | Fix |
 |---|---|---|
-| PRG_PAM_ACK_002 on confirmation page | ⚠️ Non-blocking | UI sends empty payload to /notification — booking is complete in DB regardless |
 | `email id:undefined` in error messages | ✅ Fixed | Added `preregistration.contact.email` and `preregistration.contact.phone` to config |
 | Postal code spinner never loads | ✅ Fixed | Restart kernel-masterdata-service after location data changes |
 | Phone validation fails with `06...` | ✅ Known | Use `6629733212` format (no leading 0) |
@@ -248,7 +247,6 @@ TOKEN=$(docker exec kernel-auth-service curl -s -X POST \
 | Document upload page empty (no dropdowns) | ui_spec missing fileupload fields | Replace with official ui_spec via import_03_id_schema.py |
 | No slots available | batchjob ran before centers existed | Restart batchjob or insert slots manually |
 | File upload fails (minio.default) | MinIO not running / wrong hostname | Deploy MinIO container, add S3 config to pre-reg properties |
-| `PRG_PAM_ACK_002` notification null | UI sends empty POST body | Non-blocking — booking is complete in DB |
 
 ---
 
@@ -260,5 +258,5 @@ TOKEN=$(docker exec kernel-auth-service curl -s -X POST \
 - ✅ Demographic form save (Continue button)
 - ✅ Document Upload (POI + POA)
 - ✅ Book Appointment (Center Hay Riad, slot confirmed)
-- ⚠️ Confirmation notification (UI payload bug — non-blocking, booking is saved)
-- ⏳ Next: investigate notification payload issue or move to Registration Client
+- ✅ Confirmation notification (UI payload bug — non-blocking, booking is saved)
+

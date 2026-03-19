@@ -1,0 +1,2 @@
+id,name,description,dataType,valueJson,langCode,isActive
+10458,bloodType,BloodType,string,"{"value":"français","code":"fra"}",eng,TRUE
