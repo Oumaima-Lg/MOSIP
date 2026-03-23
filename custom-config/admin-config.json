@@ -1,0 +1,9 @@
+{
+    "primaryLangCode": "eng",
+    "secondaryLangCode": "ara",
+    "baseUrl": "http://localhost/v1/",
+    "adminUrl": "/admin-ui/",
+    "validateToken": "admin/authorize/admin/validateToken",
+    "login": "admin/login/",
+    "logout": "admin/logout/user"
+}

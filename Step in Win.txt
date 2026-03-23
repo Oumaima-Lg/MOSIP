@@ -323,6 +323,8 @@ docker exec mosip-proxy nginx -s reload
 
 
 
+
+
 ----------------------------------------------------------------------------------------------------------> kernel-syncdata-service
 syncdata-default.properties
 
@@ -353,32 +355,45 @@ Connection -> Host name/address : postgres (Container Name), Username : postgres
 ----------------------------------------------------------------------------------------------------------> mosip_master DB
 admin-services-release-1.2.0
 
-docker exec -i postgres psql -U postgres -d mosip_master << 'EOF'
-TRUNCATE TABLE master.screen_authorization CASCADE;
-TRUNCATE TABLE master.screen_detail CASCADE;
-TRUNCATE TABLE master.app_authentication_method CASCADE;
-TRUNCATE TABLE master.app_role_priority CASCADE;
-TRUNCATE TABLE master.biometric_attribute CASCADE;
-TRUNCATE TABLE master.biometric_type CASCADE;
-TRUNCATE TABLE master.authentication_method CASCADE;
-TRUNCATE TABLE master.reason_list CASCADE;
-TRUNCATE TABLE master.status_list CASCADE;
-TRUNCATE TABLE master.sync_job_def CASCADE;
-TRUNCATE TABLE master.template CASCADE;
-TRUNCATE TABLE master.app_detail CASCADE;
-TRUNCATE TABLE master.module_detail CASCADE;
-TRUNCATE TABLE master.process_list CASCADE;
-TRUNCATE TABLE master.reason_category CASCADE;
-TRUNCATE TABLE master.role_list CASCADE;
-TRUNCATE TABLE master.status_type CASCADE;
-TRUNCATE TABLE master.template_file_format CASCADE;
-TRUNCATE TABLE master.template_type CASCADE;
-TRUNCATE TABLE master.daysofweek_list CASCADE;
-TRUNCATE TABLE master.gender CASCADE;
-TRUNCATE TABLE master.doc_category CASCADE;
-EOF
+databases=(
+    "mosip_master"
+)
+
+for db in "${databases[@]}"; do
+    echo "========================================="
+    echo "🔄 Initialisation de $db..."
+    echo "========================================="
+    docker run --rm \
+      --network mosip-network \
+      -e DB_SERVERIP=postgres \
+      -e DB_PORT=5432 \
+      -e SU_USER=postgres \
+      -e SU_USER_PWD=mosip123 \
+      -e DEFAULT_DB_NAME=postgres \
+      -e DBUSER_PWD=mosip123 \
+      -e DML_FLAG=1 \
+      -e MOSIP_DB_NAME="$db" \
+      mosipid/postgres-init:1.2.0
+    if [ $? -eq 0 ]; then
+        echo "✅ Initialisation de $db réussie !"
+    else
+        echo "❌ Erreur lors de l'initialisation de $db"
+        exit 1
+    fi
+    sleep 2
+done
 
 docker exec -i postgres bash -c "cd /tmp && psql -U postgres -d mosip_master -f dml.sql"
+
+py -m pip install pandas sqlalchemy psycopg2-binary openpyxl
+py C:/Users/olaghjibi/MOSIP/import_01_documents.py
+py C:/Users/olaghjibi/MOSIP/import_02_location.py
+py C:/Users/olaghjibi/MOSIP/import_03_id_schema.py
+py C:/Users/olaghjibi/MOSIP/import_05_others.py
+py C:/Users/olaghjibi/MOSIP/import_06_templates.py
+py C:/Users/olaghjibi/MOSIP/import_04_registration_center.py 
+py C:/Users/olaghjibi/MOSIP/import_07_language_gender.py
+
 
 
 ----------------------------------------------------------------------------------------------------------> mosip_hotlist db
@@ -409,6 +424,7 @@ for db in "${databases[@]}"; do
     fi
     sleep 2
 done
+
 
 ----------------------------------------------------------------------------------------------------------> websub-service 
 
@@ -445,7 +461,35 @@ docker run -d --name admin-service \
 
 ----------------------------------------------------------------------------------------------------------> admin-ui
 
+docker rm -f artifactory-server
+
 docker run -d --name artifactory-server \
   --network mosip-network \
-  -p 8084:80 \
+  -p 8084:8080 \
+  --user root \
   mosipid/artifactory-server:1.2.0
+
+
+docker run -d --name admin-ui \
+  --network mosip-network \
+  -p 8096:8080 \
+  -e artifactory_url_env=http://artifactory-server:8080 \
+  -v C:/Users/olaghjibi/MOSIP/custom-config/admin-config.json:/usr/share/nginx/html/assets/config.json \
+  mosipid/admin-ui:1.2.0
+
+
+C:\Users\olaghjibi\MOSIP\custom-config\admin-config.json
+C:\Users\olaghjibi\MOSIP\custom-config\mosip-proxy.conf
+docker exec mosip-proxy nginx -s reload
+
+docker exec admin-ui sh -c "sed -i 's|https://dev.mosip.net|http://localhost|g' /usr/share/nginx/html/main-es2015.906cba0ff714c15f0618.js"
+docker exec admin-ui sh -c "sed -i 's|https://dev.mosip.net|http://localhost|g' /usr/share/nginx/html/main-es5.906cba0ff714c15f0618.js"
+
+docker exec admin-ui sh -c "grep -c 'dev.mosip.net' /usr/share/nginx/html/main-es2015.906cba0ff714c15f0618.js"
+docker exec admin-ui sh -c "grep -c 'dev.mosip.net' /usr/share/nginx/html/main-es5.906cba0ff714c15f0618.js"
+
+http://localhost/admin-ui/#/
+
+Open F12 → Network tab
+Check "Disable cache"
+
