@@ -448,6 +448,8 @@ docker run -d --name hotlist-service \
 
 admin-default.properties
 
+add in C:\Windows\System32\drivers\etc\hosts : 127.0.0.1 keycloak
+
 docker run -d --name admin-service \
   --network mosip-network \
   -p 8098:8098 \
@@ -461,7 +463,10 @@ docker run -d --name admin-service \
 
 ----------------------------------------------------------------------------------------------------------> admin-ui
 
-docker rm -f artifactory-server
+C:\Users\olaghjibi\MOSIP\custom-config\admin-config.json
+C:\Users\olaghjibi\MOSIP\nginx-proxy\default.conf
+docker exec mosip-proxy nginx -s reload
+
 
 docker run -d --name artifactory-server \
   --network mosip-network \
@@ -478,15 +483,13 @@ docker run -d --name admin-ui \
   mosipid/admin-ui:1.2.0
 
 
-C:\Users\olaghjibi\MOSIP\custom-config\admin-config.json
-C:\Users\olaghjibi\MOSIP\custom-config\mosip-proxy.conf
-docker exec mosip-proxy nginx -s reload
-
 docker exec admin-ui sh -c "sed -i 's|https://dev.mosip.net|http://localhost|g' /usr/share/nginx/html/main-es2015.906cba0ff714c15f0618.js"
 docker exec admin-ui sh -c "sed -i 's|https://dev.mosip.net|http://localhost|g' /usr/share/nginx/html/main-es5.906cba0ff714c15f0618.js"
 
 docker exec admin-ui sh -c "grep -c 'dev.mosip.net' /usr/share/nginx/html/main-es2015.906cba0ff714c15f0618.js"
 docker exec admin-ui sh -c "grep -c 'dev.mosip.net' /usr/share/nginx/html/main-es5.906cba0ff714c15f0618.js"
+
+
 
 
 Create Keycloak globaladmin User

@@ -1,9 +1,19 @@
 {
-    "primaryLangCode": "eng",
-    "secondaryLangCode": "ara",
-    "baseUrl": "http://localhost/v1/",
-    "adminUrl": "/admin-ui/",
-    "validateToken": "admin/authorize/admin/validateToken",
-    "login": "admin/login/",
-    "logout": "admin/logout/user"
+  "primaryLangCode": "eng",
+  "secondaryLangCode": "ara",
+  "baseUrl": "http://localhost/v1/",
+  "adminUrl": "/admin-ui/",
+  "keycloak": {
+    "enabled": true,
+    "config": {
+      "url": "http://localhost:8080/auth/",
+      "realm": "mosip",
+      "clientId": "mosip-admin-client",
+      "clientSecret": "mosip123",
+      "redirectUri": "http://localhost/admin-ui/"
+    }
+  },
+  "validateToken": "admin/authorize/admin/validateToken",
+  "login": "admin/login/",
+  "logout": "admin/logout/user"
 }
