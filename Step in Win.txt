@@ -321,10 +321,6 @@ docker exec mosip-proxy nginx -s reload
 
 
 
-
-
-
-
 ----------------------------------------------------------------------------------------------------------> kernel-syncdata-service
 syncdata-default.properties
 
@@ -395,6 +391,11 @@ py C:/Users/olaghjibi/MOSIP/import_04_registration_center.py
 py C:/Users/olaghjibi/MOSIP/import_07_language_gender.py
 
 
+
+The sequence tracker is OUT OF SYNC with the actual data (Between rcid_seq and registration_center) -> 
+In pgadmin, Try to delete 10000 in registration_center, create a center (Admin UI) and Update 10000 to 10015 in  rcid_seq.
+
+docker exec postgres psql -U masteruser -d mosip_master -c "DELETE FROM registration_center WHERE id='10000';"
 
 ----------------------------------------------------------------------------------------------------------> mosip_hotlist db
 
