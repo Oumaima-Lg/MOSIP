@@ -10,6 +10,10 @@
 	http://172.19.34.65:9001/
 	Credentials: minioadmin / minioadmin123
 
+**PgAdmin:
+  http://172.19.34.65:5050/
+  Credentials : admin@admin.com / admin
+
 
 ---------------------------------------------------------------------------------------------------------->  Depo
 git clone http://172.18.37.25:8010/egov/version-clients/mx-id-mosip.git
@@ -298,7 +302,7 @@ docker run -d \
   pre-reg-batchjob-custom:1.2.0
 
 
-----------------------------------------------------------------------------------------------------------> 7. UI
+----------------------------------------------------------------------------------------------------------> 7. Pre-registration-UI
 docker run -d \
   --name pre-reg-ui \
   --network mosip-network \
@@ -318,3 +322,188 @@ docker run -d \
 docker cp /home/mosip/mx-id-mosip/custom-config/config.json pre-reg-ui:/usr/share/nginx/html/assets/config.json
 docker cp /home/mosip/mx-id-mosip/nginx-proxy/default.conf mosip-proxy:/etc/nginx/conf.d/default.conf
 docker exec mosip-proxy nginx -s reload
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------> kernel-syncdata-service
+docker run -d --name kernel-syncdata-service \
+  --network mosip-network \
+  -p 8089:8089 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://172.19.34.65:51000/config \
+  -e is_glowroot_env=absent \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  mosipid/kernel-syncdata-service:1.2.0
+
+
+----------------------------------------------------------------------------------------------------------> pgadmin
+docker run -d \
+  --name pgadmin \
+  --network mosip-network \
+  -p 5050:80 \
+  -e PGADMIN_DEFAULT_EMAIL=admin@admin.com \
+  -e PGADMIN_DEFAULT_PASSWORD=admin \
+  dpage/pgadmin4
+
+"Servers" → "Register" → "Server…"
+General -> Connection Name : MOSIP
+Connection -> Host name/address : postgres (Container Name), Username : postgres, Password : mosip123, "Save password?"
+
+
+----------------------------------------------------------------------------------------------------------> mosip_master DB
+databases=(
+    "mosip_master"
+)
+
+for db in "${databases[@]}"; do
+    echo "========================================="
+    echo "🔄 Initialisation de $db..."
+    echo "========================================="
+    docker run --rm \
+      --network mosip-network \
+      -e DB_SERVERIP=postgres \
+      -e DB_PORT=5432 \
+      -e SU_USER=postgres \
+      -e SU_USER_PWD=mosip123 \
+      -e DEFAULT_DB_NAME=postgres \
+      -e DBUSER_PWD=mosip123 \
+      -e DML_FLAG=1 \
+      -e MOSIP_DB_NAME="$db" \
+      mosipid/postgres-init:1.2.0
+    if [ $? -eq 0 ]; then
+        echo "✅ Initialisation de $db réussie !"
+    else
+        echo "❌ Erreur lors de l'initialisation de $db"
+        exit 1
+    fi
+    sleep 2
+done
+
+
+docker cp /home/mosip/mx-id-mosip/admin-services-release-1.2.0/db_scripts/mosip_master/dml postgres:/tmp/dml
+docker cp /home/mosip/mx-id-mosip/admin-services-release-1.2.0/db_scripts/mosip_master/dml.sql postgres:/tmp/dml.sql
+docker exec -i postgres bash -c "cd /tmp && psql -U postgres -d mosip_master -f dml.sql"
+
+python3 /home/mosip/mx-id-mosip/import_01_documents.py
+python3 /home/mosip/mx-id-mosip/import_02_location.py
+python3 /home/mosip/mx-id-mosip/import_03_id_schema.py
+python3 /home/mosip/mx-id-mosip/import_05_others.py
+python3 /home/mosip/mx-id-mosip/import_06_templates.py
+python3 /home/mosip/mx-id-mosip/import_04_registration_center.py 
+python3 /home/mosip/mx-id-mosip/import_07_language_gender.py
+
+
+----------------------------------------------------------------------------------------------------------> mosip_hotlist db
+databases=(
+    "mosip_hotlist"
+)
+
+for db in "${databases[@]}"; do
+    echo "========================================="
+    echo "🔄 Initialisation de $db..."
+    echo "========================================="
+    docker run --rm \
+      --network mosip-network \
+      -e DB_SERVERIP=postgres \
+      -e DB_PORT=5432 \
+      -e SU_USER=postgres \
+      -e SU_USER_PWD=mosip123 \
+      -e DEFAULT_DB_NAME=postgres \
+      -e DBUSER_PWD=mosip123 \
+      -e MOSIP_DB_NAME="$db" \
+      mosipid/postgres-init:1.2.0
+    if [ $? -eq 0 ]; then
+        echo "✅ Initialisation de $db réussie !"
+    else
+        echo "❌ Erreur lors de l'initialisation de $db"
+        exit 1
+    fi
+    sleep 2
+done
+
+
+----------------------------------------------------------------------------------------------------------> websub-service 
+
+
+----------------------------------------------------------------------------------------------------------> hotlist-service
+docker run -d --name hotlist-service \
+  --network mosip-network \
+  -p 8095:8095 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://172.19.34.65:51000/config \
+  -e is_glowroot_env=absent \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  mosipid/hotlist-service:1.2.0
+
+
+----------------------------------------------------------------------------------------------------------> admin-service
+
+
+
+add in C:\Windows\System32\drivers\etc\hosts : 127.0.0.1 keycloak
+
+docker run -d --name admin-service \
+  --network mosip-network \
+  -p 8098:8098 \
+  -e active_profile_env=default \
+  -e spring_config_label_env=master \
+  -e spring_config_url_env=http://172.19.34.65:51000/config \
+  -e is_glowroot_env=absent \
+  -e iam_adapter_url_env=https://repo1.maven.org/maven2/io/mosip/kernel/kernel-auth-adapter/1.2.0/kernel-auth-adapter-1.2.0.jar \
+  mosipid/admin-service:1.2.0
+
+
+----------------------------------------------------------------------------------------------------------> admin-ui
+
+C:\Users\olaghjibi\MOSIP\custom-config\admin-config.json
+C:\Users\olaghjibi\MOSIP\nginx-proxy\default.conf
+docker exec mosip-proxy nginx -s reload
+
+
+docker run -d --name artifactory-server \
+  --network mosip-network \
+  -p 8084:8080 \
+  --user root \
+  mosipid/artifactory-server:1.2.0
+
+
+docker run -d --name admin-ui \
+  --network mosip-network \
+  -p 8096:8080 \
+  -e artifactory_url_env=http://artifactory-server:8080 \
+  -v C:/Users/olaghjibi/MOSIP/custom-config/admin-config.json:/usr/share/nginx/html/assets/config.json \
+  mosipid/admin-ui:1.2.0
+
+
+docker exec admin-ui sh -c "sed -i 's|https://dev.mosip.net|http://localhost|g' /usr/share/nginx/html/main-es2015.906cba0ff714c15f0618.js"
+docker exec admin-ui sh -c "sed -i 's|https://dev.mosip.net|http://localhost|g' /usr/share/nginx/html/main-es5.906cba0ff714c15f0618.js"
+
+docker exec admin-ui sh -c "grep -c 'dev.mosip.net' /usr/share/nginx/html/main-es2015.906cba0ff714c15f0618.js"
+docker exec admin-ui sh -c "grep -c 'dev.mosip.net' /usr/share/nginx/html/main-es5.906cba0ff714c15f0618.js"
+
+
+
+
+Create Keycloak globaladmin User
+In Keycloak at http://localhost:8080:
+Go to realm mosip → Users → Add user
+Username: globaladmin, email: globaladmin@mosip.io
+Set password: e.g. Mosip@admin123
+Assign role: GLOBAL_ADMIN (from realm roles)
+
+http://localhost/admin-ui/#/
+
+Open F12 → Network tab
+Check "Disable cache"
+
+docker exec postgres psql -U masteruser -d mosip_master -c "DELETE FROM registration_center WHERE id='10000';"
+
+The sequence tracker is OUT OF SYNC with the actual data (Between rcid_seq and registration_center) -> 
+In pgadmin, Try to delete 10000 in registration_center, create a center (Admin UI) and Update 10000 to 10015 in  rcid_seq.
+
+

@@ -379,6 +379,9 @@ for db in "${databases[@]}"; do
     sleep 2
 done
 
+docker cp C:/Users/olaghjibi/MOSIP/admin-services-release-1.2.0/db_scripts/mosip_master/dml postgres:/tmp/dml
+docker cp C:/Users/olaghjibi/MOSIP/admin-services-release-1.2.0/db_scripts/mosip_master/dml.sql postgres:/tmp/dml.sql
+
 docker exec -i postgres bash -c "cd /tmp && psql -U postgres -d mosip_master -f dml.sql"
 
 py -m pip install pandas sqlalchemy psycopg2-binary openpyxl
@@ -390,12 +393,6 @@ py C:/Users/olaghjibi/MOSIP/import_06_templates.py
 py C:/Users/olaghjibi/MOSIP/import_04_registration_center.py 
 py C:/Users/olaghjibi/MOSIP/import_07_language_gender.py
 
-
-
-The sequence tracker is OUT OF SYNC with the actual data (Between rcid_seq and registration_center) -> 
-In pgadmin, Try to delete 10000 in registration_center, create a center (Admin UI) and Update 10000 to 10015 in  rcid_seq.
-
-docker exec postgres psql -U masteruser -d mosip_master -c "DELETE FROM registration_center WHERE id='10000';"
 
 ----------------------------------------------------------------------------------------------------------> mosip_hotlist db
 
@@ -504,4 +501,10 @@ http://localhost/admin-ui/#/
 
 Open F12 → Network tab
 Check "Disable cache"
+
+docker exec postgres psql -U masteruser -d mosip_master -c "DELETE FROM registration_center WHERE id='10000';"
+
+The sequence tracker is OUT OF SYNC with the actual data (Between rcid_seq and registration_center) -> 
+In pgadmin, Try to delete 10000 in registration_center, create a center (Admin UI) and Update 10000 to 10015 in  rcid_seq.
+
 

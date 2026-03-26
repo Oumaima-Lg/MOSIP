@@ -110,20 +110,3 @@ TRUNCATE TABLE master.template cascade ;
 TRUNCATE TABLE master.screen_authorization cascade ;
 
 \COPY master.screen_authorization (screen_id,role_code,lang_code,is_permitted,is_active,cr_by,cr_dtimes) FROM './dml/master-screen_authorization.csv' delimiter ',' HEADER  csv;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
