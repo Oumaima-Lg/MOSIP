@@ -2,6 +2,9 @@
 **Module 1 : Pre-registration
   http://localhost/pre-registration-ui/#/eng
 
+**Module 2 : Admin Portal
+  http://localhost/admin-ui/#/
+
 **Keycloak:
 	http://localhost:8080/
 	Credentials: admin / mosip123
@@ -9,6 +12,10 @@
 **Minio:
 	http://localhost:9001/
 	Credentials: minioadmin / minioadmin123
+
+**PgAdmin:
+  http://localhost:5050/
+  Credentials : admin@admin.com / admin
 
 
 ---------------------------------------------------------------------------------------------------------->  Depo
@@ -488,14 +495,17 @@ docker exec admin-ui sh -c "grep -c 'dev.mosip.net' /usr/share/nginx/html/main-e
 docker exec admin-ui sh -c "grep -c 'dev.mosip.net' /usr/share/nginx/html/main-es5.906cba0ff714c15f0618.js"
 
 
-
-
 Create Keycloak globaladmin User
-In Keycloak at http://localhost:8080:
+In Keycloak at http://172.19.34.65:8080:
 Go to realm mosip → Users → Add user
-Username: globaladmin, email: globaladmin@mosip.io
-Set password: e.g. Mosip@admin123
+Username: globaladmin, email: globaladmin@mosip.io, First Name: Global, Last Name: Admin, Email Verified : ON
+Set password: e.g. globaladmin
 Assign role: GLOBAL_ADMIN (from realm roles)
+GLOBAL_ADMIN
+offline_access
+REGISTRATION_SUPERVISOR
+uma_authorization
+ZONAL_ADMIN
 
 http://localhost/admin-ui/#/
 
