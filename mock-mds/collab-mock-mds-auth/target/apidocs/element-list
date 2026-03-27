@@ -1,0 +1,13 @@
+io.mosip.mock.sbi
+io.mosip.mock.sbi.devicehelper
+io.mosip.mock.sbi.devicehelper.face
+io.mosip.mock.sbi.devicehelper.finger.single
+io.mosip.mock.sbi.devicehelper.finger.slap
+io.mosip.mock.sbi.devicehelper.iris.binacular
+io.mosip.mock.sbi.devicehelper.iris.monocular
+io.mosip.mock.sbi.exception
+io.mosip.mock.sbi.service
+io.mosip.mock.sbi.test
+io.mosip.mock.sbi.util
+io.mosip.registration.mdm.dto
+org.biometric.provider

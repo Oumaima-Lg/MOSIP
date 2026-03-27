@@ -1,9 +1,21 @@
 ----------------------------------------------------------------------------------------------------------> Demo
 **Module 1 : Pre-registration
   http://localhost/pre-registration-ui/#/eng
+  OTP : 111111
 
 **Module 2 : Admin Portal
   http://localhost/admin-ui/#/
+  Credentiel : globaladmin / globaladmin
+  add in "C:\Windows\System32\drivers\etc\hosts "  172.19.34.65 keycloak
+
+**Module 3 : registration_center
+  System prerequisites:
+    CPU - Dual Core Processor - 2GHZ
+    RAM - 16 GB
+    Local Storage Disk Space - 500 GB
+    USB 2.0 ports or equivalent hub.
+    Physical machine with TPM 2.0 facility.
+    Windows OS [10 v]
 
 **Keycloak:
 	http://localhost:8080/
@@ -16,6 +28,8 @@
 **PgAdmin:
   http://localhost:5050/
   Credentials : admin@admin.com / admin
+
+
 
 
 ---------------------------------------------------------------------------------------------------------->  Depo
@@ -516,5 +530,72 @@ docker exec postgres psql -U masteruser -d mosip_master -c "DELETE FROM registra
 
 The sequence tracker is OUT OF SYNC with the actual data (Between rcid_seq and registration_center) -> 
 In pgadmin, Try to delete 10000 in registration_center, create a center (Admin UI) and Update 10000 to 10015 in  rcid_seq.
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------> DB Insertion : machine_type & machine_spec
+docker exec postgres psql -U masteruser -d mosip_master -c "
+INSERT INTO master.machine_type (code, name, descr, lang_code, is_active, cr_by, cr_dtimes) VALUES
+('LAPTOP', 'Laptop', 'Laptop Computer', 'eng', true, 'admin', NOW()),
+('DESKTOP', 'Desktop', 'Desktop Computer', 'eng', true, 'admin', NOW()),
+('TABLET', 'Tablet', 'Tablet Device', 'eng', true, 'admin', NOW());
+"
+
+docker exec postgres psql -U masteruser -d mosip_master -c "
+INSERT INTO master.machine_spec (id, name, brand, model, mtyp_code, min_driver_ver, descr, lang_code, is_active, cr_by, cr_dtimes) VALUES     
+('11111111-1111-1111-1111-111111111111', 'Vostro', 'Dell', 'Vostro 3000', 'LAPTOP', '1.0', 'Dell Vostro 3000 Series', 'eng', true, 'admin', NOW()),
+('22222222-2222-2222-2222-222222222222', 'OptiPlex', 'Dell', 'OptiPlex 3080', 'DESKTOP', '1.0', 'Dell OptiPlex Desktop', 'eng', true, 'admin', NOW()),
+('33333333-3333-3333-3333-333333333333', 'ThinkPad', 'Lenovo', 'X1 Carbon', 'LAPTOP', '1.0', 'Lenovo ThinkPad X1 Carbon', 'eng', true, 'admin', NOW()),
+('44444444-4444-4444-4444-444444444444', 'EliteBook', 'HP', '840 G8', 'LAPTOP', '1.0', 'HP EliteBook 840 G8', 'eng', true, 'admin', NOW()),
+('55555555-5555-5555-5555-555555555555', 'Latitude', 'Dell', 'Latitude 5420', 'LAPTOP', '1.0', 'Dell Latitude 5420', 'eng', true, 'admin', NOW());
+"
+
+
+----------------------------------------------------------------------------------------------------------> Machine & TPM
+Keycloak : -> Email Verified : OFF
+           -> check ROLE MAPPING : GLOBAL_ADMIN, offline_access, REGISTRATION_SUPERVISOR, uma_authorization, ZONAL_ADMIN
+
+Admin Portal : Mappage du centre d'utilisateurs -> map user globaladmin to "centre assam" & "Activer"  
+               Mappage zone -> check if globaladmin zone is activated 
+
+Download tpmutility-0.0.2.jar : https://drive.google.com/file/d/1pY4388ER4KKBonyPCZni-VMoDYAV2bRj/view
+
+For more details, read : https://docs.mosip.io/1.2.0/~/changes/EDXkAXJ2BnUpKbwo76Y3/collab-getting-started-guide/collab-reg-client-setup-guide 
+
+java -jar tpmutility-0.0.2.jar > tpmdetails.txt
+
+Mac (ETH3) : Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | Select-Object Name, MacAddress
+série : wmic bios get serialnumber
+IP : Get-NetIPAddress -InterfaceAlias "Ethernet 3" -AddressFamily IPv4 | Select-Object -ExpandPropert
+
+Create Machine In Admin Portal :
+Nom de la machine : M2M-DEV-Oumaima
+Numéro de série  : PF2V6BMR
+MAC Adresse : 38-F3-AB-5F-34-4B
+IP Adresse : 10.70.10.51
+Identifiant de machine : ThinkPad
+Clé publique : AAEACwACAHIAIINxl2dEhLP4GpDMjUal1yT9UtduBlILZPKh2hszFGmqABAAFwALCAAAAQABAQCqJ_v-HM48kCxT_6yWSaP1P9xidHyKpY5YjGMyZrnzBIzYwICxg_9VprfHJoJOxKm7ORPGuKgfZz7OGXm0DnromEU6WoW-SUCai4wkBjzsVdeA8ob83QuN4xWdJsmMlYPVRJCbmi6i9fvI5ztxH2DIO7hI0HnHanXJcQkyiFKRz6Wf8mPQukc9tZYudI8Uiy40rCrLdd9DSgB6iFk7PMHFmougS12Ogpl5pjUEmJSrzLc4AAWnpGvuP_agtzeMlKHgllw-YuvBWdM_APB2pxEYrhSKMFYXvScRXpOk4hWgU5LG3aKccmIrrU5BggHv_YGpgb9pzhZo4tOjVriniIvh
+Signer la clé publique : AAEABAAEAHIAAAAQABQACwgAAAEAAQEAxgm4HRDn46glyzBhT9E2WHZ2jLPF6V5gOea1PY4d4p4dXt16EomUDms1lT2S_StAs_CAM1nehCSoVJ_hZhuKtTUHy8RqvFR-ramXOCFvqH2TelmNxcL3DUB-98BMhfmmrXNAt89P5i9Ldr_Lfks7Nu46_wgo0pUiAghJUZe7wdYqAmtXDb4sfxmqpczsWkTGdB88nLBFxV_6HbC2wu0_tyrSfrmQHnwnTYaG4wNvQJbpWFR5Un5N-gQ1E7_eEtQDAs87eOmJyRiz_RMtWj_1snUIaPelJIrQ6DeRCs5pn3UjsR1K2bKkzRwkimXYPM0s0kUMZG6CVWPU-wW-DWThoQ	
+Zone : Maroc
+Nom du centre : centre assam
+
+activate Machine
+
+
+
+---------------------------------------------------------------------------------------------------------->  Mock MDS
+Download Mock MDS : https://drive.google.com/drive/folders/14q7E5pZtfj0eimF3JGzlVfU4eV-MRPCQ
+
+
+
+
+
+
 
 
