@@ -588,11 +588,15 @@ Nom du centre : centre assam
 activate Machine
 
 
-
 ---------------------------------------------------------------------------------------------------------->  Mock MDS
 Download Mock MDS : https://drive.google.com/drive/folders/14q7E5pZtfj0eimF3JGzlVfU4eV-MRPCQ
 
+C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target : run & run_reg
+C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-auth\target : run & run_auth
 
+
+---------------------------------------------------------------------------------------------------------->  reg-client
+Download : https://regclient.collab.mosip.net/   ou   https://regclient-api.collab.mosip.net/registration-client/1.2.0.1-B1/reg-client.zip
 
 
 
