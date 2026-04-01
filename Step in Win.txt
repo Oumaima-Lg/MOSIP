@@ -6,7 +6,7 @@
 **Module 2 : Admin Portal
   http://localhost/admin-ui/#/
   Credentiel : globaladmin / globaladmin
-  add in "C:\Windows\System32\drivers\etc\hosts "  172.19.34.65 keycloak
+  add in "C:\Windows\System32\drivers\etc\hosts"  172.19.34.65 keycloak
 
 **Module 3 : registration_center
   System prerequisites:
@@ -268,10 +268,21 @@ docker exec kernel-keymanager-service curl -s -X POST "http://localhost:8088/v1/
   -H "Content-Type: application/json" \
   -d '{"id":"io.mosip.kernel.generateMasterKey","version":"1.0","requesttime":"2026-03-18T00:00:00.000Z","request":{"applicationId":"ROOT","referenceId":"","force":false}}'
 
+docker exec kernel-keymanager-service curl -s -X POST "http://172.19.34.65:8088/v1/keymanager/generateMasterKey/certificate" \
+  -H "Cookie: Authorization=$TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"io.mosip.kernel.generateMasterKey","version":"1.0","requesttime":"2026-03-31T00:00:00.000Z","request":{"applicationId":"KERNEL","referenceId":"","force":false}}'
+
 docker exec kernel-keymanager-service curl -s -X POST "http://localhost:8088/v1/keymanager/generateMasterKey/certificate" \
   -H "Cookie: Authorization=$TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"id":"io.mosip.kernel.generateMasterKey","version":"1.0","requesttime":"2026-03-14T00:00:00.000Z","request":{"applicationId":"PRE_REGISTRATION","referenceId":"","force":false}}'
+
+docker exec kernel-keymanager-service curl -s -X POST "http://172.19.34.65:8088/v1/keymanager/generateMasterKey/certificate" \
+  -H "Cookie: Authorization=$TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"io.mosip.kernel.generateMasterKey", "version":"1.0", "requesttime":"2026-03-31T00:00:00.000Z", "request":{"applicationId":"KERNEL", "referenceId":"SIGN", "force":false}}'
+
 
 
 
@@ -598,6 +609,42 @@ C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-auth\target : run & run_auth
 ---------------------------------------------------------------------------------------------------------->  reg-client
 Download : https://regclient.collab.mosip.net/   ou   https://regclient-api.collab.mosip.net/registration-client/1.2.0.1-B1/reg-client.zip
 
+dans Windows:
+add in "C:\Windows\System32\drivers\etc\hosts"
+172.19.34.65 regclient-api.collab.mosip.net
+172.19.34.65 regclient.collab.mosip.net
+172.19.34.65 mosip-proxy
+
+
+dans server:
+mkdir -p /home/mosip/mx-id-mosip/nginx-proxy/ssl
+
+openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+  -keyout /home/mosip/mx-id-mosip/nginx-proxy/ssl/ssl.key \
+  -out /home/mosip/mx-id-mosip/nginx-proxy/ssl/ssl.crt \
+  -subj "/CN=regclient-api.collab.mosip.net"
+
+
+docker run -d \
+  --name mosip-proxy \
+  --network mosip-network \
+  -p 80:80 \
+  -p 443:443 \
+  -v /home/mosip/mx-id-mosip/nginx-proxy/default.conf:/etc/nginx/conf.d/default.conf:ro \
+  -v /home/mosip/mx-id-mosip/nginx-proxy/ssl:/etc/nginx/ssl:ro \
+  nginx:alpine
+
+
+docker cp mosip-proxy:/etc/nginx/ssl/ssl.crt /home/mosip/ssl.crt
+
+dans windows:
+cd C:\Users\olaghjibi\MOSIP\reg-client
+
+jre\bin\keytool -import -trustcacerts -alias mosip-local `
+  -file C:\Users\olaghjibi\MOSIP\ssl.crt `
+  -keystore jre\lib\security\cacerts `
+  -storepass changeit `
+  -noprompt
 
 
 

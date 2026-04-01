@@ -248,7 +248,7 @@ docker run -d --name kernel-keymanager-service --network mosip-network -p 8088:8
   kernel-keymanager-custom:1.2.0
 
 TOKEN=$(docker exec kernel-keymanager-service curl -s -X POST "http://keycloak:8080/auth/realms/mosip/protocol/openid-connect/token" \
-  -d "client_id=mosip-admin-client&client_secret=mosip123&grant_type=client_credentials" | py -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+  -d "client_id=mosip-admin-client&client_secret=mosip123&grant_type=client_credentials" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 docker exec kernel-keymanager-service curl -s -X POST "http://172.19.34.65:8088/v1/keymanager/generateMasterKey/certificate" \
   -H "Cookie: Authorization=$TOKEN" \
@@ -258,8 +258,17 @@ docker exec kernel-keymanager-service curl -s -X POST "http://172.19.34.65:8088/
 docker exec kernel-keymanager-service curl -s -X POST "http://172.19.34.65:8088/v1/keymanager/generateMasterKey/certificate" \
   -H "Cookie: Authorization=$TOKEN" \
   -H "Content-Type: application/json" \
+  -d '{"id":"io.mosip.kernel.generateMasterKey","version":"1.0","requesttime":"2026-03-31T00:00:00.000Z","request":{"applicationId":"KERNEL","referenceId":"","force":false}}'
+
+docker exec kernel-keymanager-service curl -s -X POST "http://172.19.34.65:8088/v1/keymanager/generateMasterKey/certificate" \
+  -H "Cookie: Authorization=$TOKEN" \
+  -H "Content-Type: application/json" \
   -d '{"id":"io.mosip.kernel.generateMasterKey","version":"1.0","requesttime":"2026-03-14T00:00:00.000Z","request":{"applicationId":"PRE_REGISTRATION","referenceId":"","force":false}}'
 
+docker exec kernel-keymanager-service curl -s -X POST "http://172.19.34.65:8088/v1/keymanager/generateMasterKey/certificate" \
+  -H "Cookie: Authorization=$TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"io.mosip.kernel.generateMasterKey", "version":"1.0", "requesttime":"2026-03-31T00:00:00.000Z", "request":{"applicationId":"KERNEL", "referenceId":"SIGN", "force":false}}'
 
 
 ----------------------------------------------------------------------------------------------------------> 7. Pre-registration Services
