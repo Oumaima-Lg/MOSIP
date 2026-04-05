@@ -1485,3 +1485,4 @@ py C:\Users\olaghjibi\MOSIP\import_08_app_detail_role_priority.py
 https://github.com/mosip/commons/blob/master/StartKernelCoreComponents_instructions.md
 https://deepwiki.com/mosip/documentation/2.2-registration-process
 https://academy.mosip.io/?redirect=0
+https://docs.mosip.io/1.2.0/~/changes/EDXkAXJ2BnUpKbwo76Y3/collab-getting-started-guide/collab-reg-client-setup-guide 

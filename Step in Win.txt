@@ -353,6 +353,12 @@ docker exec mosip-proxy nginx -s reload
 
 
 
+
+
+
+
+
+
 ----------------------------------------------------------------------------------------------------------> kernel-syncdata-service
 syncdata-default.properties
 
@@ -550,7 +556,11 @@ In pgadmin, Try to delete 10000 in registration_center, create a center (Admin U
 
 
 
+
+
 ----------------------------------------------------------------------------------------------------------> DB Insertion : machine_type & machine_spec
+On server (Maybe win Later):
+
 docker exec postgres psql -U masteruser -d mosip_master -c "
 INSERT INTO master.machine_type (code, name, descr, lang_code, is_active, cr_by, cr_dtimes) VALUES
 ('LAPTOP', 'Laptop', 'Laptop Computer', 'eng', true, 'admin', NOW()),
@@ -568,55 +578,50 @@ INSERT INTO master.machine_spec (id, name, brand, model, mtyp_code, min_driver_v
 "
 
 
-----------------------------------------------------------------------------------------------------------> Machine & TPM
-Keycloak : -> Email Verified : OFF
-           -> check ROLE MAPPING : GLOBAL_ADMIN, offline_access, REGISTRATION_SUPERVISOR, uma_authorization, ZONAL_ADMIN
+----------------------------------------------------------------------------------------------------------> Create Machine & TPM
+**On server : Keycloak : -> Email Verified : OFF
+                         -> check ROLE MAPPING : GLOBAL_ADMIN, offline_access, REGISTRATION_SUPERVISOR, uma_authorization, ZONAL_ADMIN
 
-Admin Portal : Mappage du centre d'utilisateurs -> map user globaladmin to "centre assam" & "Activer"  
-               Mappage zone -> check if globaladmin zone is activated 
+**On server : Admin Portal : Mappage du centre d'utilisateurs -> map user globaladmin to "centre assam" & "Activer"  
+                             Mappage zone -> check if globaladmin zone is activated 
 
-Download tpmutility-0.0.2.jar : https://drive.google.com/file/d/1pY4388ER4KKBonyPCZni-VMoDYAV2bRj/view
+**On windows : Download tpmutility-0.0.2.jar : https://drive.google.com/file/d/1pY4388ER4KKBonyPCZni-VMoDYAV2bRj/view
+**On windows : java -jar tpmutility-0.0.2.jar > tpmdetails.txt
 
-For more details, read : https://docs.mosip.io/1.2.0/~/changes/EDXkAXJ2BnUpKbwo76Y3/collab-getting-started-guide/collab-reg-client-setup-guide 
-
-java -jar tpmutility-0.0.2.jar > tpmdetails.txt
-
+**On windows : Get Machine Info (Powershell) :
 Mac (ETH3) : Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | Select-Object Name, MacAddress
 série : wmic bios get serialnumber
 IP : Get-NetIPAddress -InterfaceAlias "Ethernet 3" -AddressFamily IPv4 | Select-Object -ExpandPropert
 
-Create Machine In Admin Portal :
-Nom de la machine : M2M-DEV-Oumaima
-Numéro de série  : PF2V6BMR
-MAC Adresse : 38-F3-AB-5F-34-4B
-IP Adresse : 10.70.10.51
-Identifiant de machine : ThinkPad
-Clé publique : AAEACwACAHIAIINxl2dEhLP4GpDMjUal1yT9UtduBlILZPKh2hszFGmqABAAFwALCAAAAQABAQCqJ_v-HM48kCxT_6yWSaP1P9xidHyKpY5YjGMyZrnzBIzYwICxg_9VprfHJoJOxKm7ORPGuKgfZz7OGXm0DnromEU6WoW-SUCai4wkBjzsVdeA8ob83QuN4xWdJsmMlYPVRJCbmi6i9fvI5ztxH2DIO7hI0HnHanXJcQkyiFKRz6Wf8mPQukc9tZYudI8Uiy40rCrLdd9DSgB6iFk7PMHFmougS12Ogpl5pjUEmJSrzLc4AAWnpGvuP_agtzeMlKHgllw-YuvBWdM_APB2pxEYrhSKMFYXvScRXpOk4hWgU5LG3aKccmIrrU5BggHv_YGpgb9pzhZo4tOjVriniIvh
-Signer la clé publique : AAEABAAEAHIAAAAQABQACwgAAAEAAQEAxgm4HRDn46glyzBhT9E2WHZ2jLPF6V5gOea1PY4d4p4dXt16EomUDms1lT2S_StAs_CAM1nehCSoVJ_hZhuKtTUHy8RqvFR-ramXOCFvqH2TelmNxcL3DUB-98BMhfmmrXNAt89P5i9Ldr_Lfks7Nu46_wgo0pUiAghJUZe7wdYqAmtXDb4sfxmqpczsWkTGdB88nLBFxV_6HbC2wu0_tyrSfrmQHnwnTYaG4wNvQJbpWFR5Un5N-gQ1E7_eEtQDAs87eOmJyRiz_RMtWj_1snUIaPelJIrQ6DeRCs5pn3UjsR1K2bKkzRwkimXYPM0s0kUMZG6CVWPU-wW-DWThoQ	
-Zone : Maroc
-Nom du centre : centre assam
-
-activate Machine
+**On server : Create Machine In Admin Portal :
+Nom de la machine : M2M-DEV-Oumaima, Numéro de série  : PF2V6BMR, MAC Adresse : 38-F3-AB-5F-34-4B, IP Adresse : 10.70.10.51, Identifiant de machine : ThinkPad, Clé publique : AAEACwACAHIAIINxl2dEhLP4GpDMjUal1yT9UtduBlILZPKh2hszFGmqABAAFwALCAAAAQABAQCqJ_v-HM48kCxT_6yWSaP1P9xidHyKpY5YjGMyZrnzBIzYwICxg_9VprfHJoJOxKm7ORPGuKgfZz7OGXm0DnromEU6WoW-SUCai4wkBjzsVdeA8ob83QuN4xWdJsmMlYPVRJCbmi6i9fvI5ztxH2DIO7hI0HnHanXJcQkyiFKRz6Wf8mPQukc9tZYudI8Uiy40rCrLdd9DSgB6iFk7PMHFmougS12Ogpl5pjUEmJSrzLc4AAWnpGvuP_agtzeMlKHgllw-YuvBWdM_APB2pxEYrhSKMFYXvScRXpOk4hWgU5LG3aKccmIrrU5BggHv_YGpgb9pzhZo4tOjVriniIvh, Signer la clé publique : AAEABAAEAHIAAAAQABQACwgAAAEAAQEAxgm4HRDn46glyzBhT9E2WHZ2jLPF6V5gOea1PY4d4p4dXt16EomUDms1lT2S_StAs_CAM1nehCSoVJ_hZhuKtTUHy8RqvFR-ramXOCFvqH2TelmNxcL3DUB-98BMhfmmrXNAt89P5i9Ldr_Lfks7Nu46_wgo0pUiAghJUZe7wdYqAmtXDb4sfxmqpczsWkTGdB88nLBFxV_6HbC2wu0_tyrSfrmQHnwnTYaG4wNvQJbpWFR5Un5N-gQ1E7_eEtQDAs87eOmJyRiz_RMtWj_1snUIaPelJIrQ6DeRCs5pn3UjsR1K2bKkzRwkimXYPM0s0kUMZG6CVWPU-wW-DWThoQ, Zone : Maroc, Nom du centre : centre assam, 
+**Activate Machine
 
 
 ---------------------------------------------------------------------------------------------------------->  Mock MDS
+On Windows :
+
 Download Mock MDS : https://drive.google.com/drive/folders/14q7E5pZtfj0eimF3JGzlVfU4eV-MRPCQ
 
 C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target : run & run_reg
 C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-auth\target : run & run_auth
 
+New-NetFirewallRule -DisplayName "MOSIP Mock MDS TCP" -Direction Inbound -Protocol TCP -LocalPort 4501-4600 -Action Allow -Profile Any
+New-NetFirewallRule -DisplayName "MOSIP Mock MDS UDP" -Direction Inbound -Protocol UDP -LocalPort 4501-4600 -Action Allow -Profile Any
+
+certificate Issues
 
 ---------------------------------------------------------------------------------------------------------->  reg-client
 Download : https://regclient.collab.mosip.net/   ou   https://regclient-api.collab.mosip.net/registration-client/1.2.0.1-B1/reg-client.zip
 
-dans Windows:
+On Windows:
 add in "C:\Windows\System32\drivers\etc\hosts"
 172.19.34.65 regclient-api.collab.mosip.net
 172.19.34.65 regclient.collab.mosip.net
 172.19.34.65 mosip-proxy
 
 
-dans server:
+On server:
 mkdir -p /home/mosip/mx-id-mosip/nginx-proxy/ssl
 
 openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
@@ -637,7 +642,7 @@ docker run -d \
 
 docker cp mosip-proxy:/etc/nginx/ssl/ssl.crt /home/mosip/ssl.crt
 
-dans windows:
+On windows:
 cd C:\Users\olaghjibi\MOSIP\reg-client
 
 jre\bin\keytool -import -trustcacerts -alias mosip-local `
@@ -645,6 +650,7 @@ jre\bin\keytool -import -trustcacerts -alias mosip-local `
   -keystore jre\lib\security\cacerts `
   -storepass changeit `
   -noprompt
+
 
 
 

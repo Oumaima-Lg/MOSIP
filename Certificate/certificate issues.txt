@@ -1,0 +1,914 @@
+
+
+--> Certificats
+
+Issue 1: Mock MDS Certificate Invalid (Primary Problem)
+WARNING thrown when certificate dates are not valid.
+ERROR certificate dates are not valid.
+KER-JWS-107 --> Signature verification certificate not valid.
+
+
+------------------ On windows :
+-------------------------------
+cd "C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric Devices"
+# Regenerate Iris Double
+cd "Iris\Double\Keys"
+# Backup old
+Rename-Item Device.p12 Device_old.p12
+# Generate new keystore valid 10 years
+& "C:\Users\olaghjibi\MOSIP\reg-client\jre\bin\keytool.exe" -genkeypair `
+  -alias Device `
+  -keyalg RSA -keysize 2048 `
+  -validity 3650 `
+  -keystore Device.p12 `
+  -storetype PKCS12 `
+  -storepass mosipface `
+  -keypass mosipface `
+  -dname "CN=Mock Iris Double Device, OU=MOSIP, O=MOSIP, L=Bangalore, ST=Karnataka, C=IN"
+cd "..\..\.."
+# Regenerate Finger Slap
+cd "Finger\Slap\Keys"
+Rename-Item Device.p12 Device_old.p12
+& "C:\Users\olaghjibi\MOSIP\reg-client\jre\bin\keytool.exe" -genkeypair `
+  -alias Device `
+  -keyalg RSA -keysize 2048 `
+  -validity 3650 `
+  -keystore Device.p12 `
+  -storetype PKCS12 `
+  -storepass mosipface `
+  -keypass mosipface `
+  -dname "CN=Mock Finger Slap Device, OU=MOSIP, O=MOSIP, L=Bangalore, ST=Karnataka, C=IN"
+cd "..\..\.."
+# Regenerate Finger Single
+cd "Finger\Single\Keys"
+Rename-Item Device.p12 Device_old.p12
+& "C:\Users\olaghjibi\MOSIP\reg-client\jre\bin\keytool.exe" -genkeypair `
+  -alias Device `
+  -keyalg RSA -keysize 2048 `
+  -validity 3650 `
+  -keystore Device.p12 `
+  -storetype PKCS12 `
+  -storepass mosipface `
+  -keypass mosipface `
+  -dname "CN=Mock Finger Single Device, OU=MOSIP, O=MOSIP, L=Bangalore, ST=Karnataka, C=IN"
+cd "..\..\.."
+# Regenerate Face
+cd "Face\Keys"
+Rename-Item Device.p12 Device_old.p12
+& "C:\Users\olaghjibi\MOSIP\reg-client\jre\bin\keytool.exe" -genkeypair `
+  -alias Device `
+  -keyalg RSA -keysize 2048 `
+  -validity 3650 `
+  -keystore Device.p12 `
+  -storetype PKCS12 `
+  -storepass mosipface `
+  -keypass mosipface `
+  -dname "CN=Mock Face Device, OU=MOSIP, O=MOSIP, L=Bangalore, ST=Karnataka, C=IN"
+cd "..\.."
+# Regenerate Iris Single
+cd "Iris\Single\Keys"
+Rename-Item Device.p12 Device_old.p12
+& "C:\Users\olaghjibi\MOSIP\reg-client\jre\bin\keytool.exe" -genkeypair `
+  -alias Device `
+  -keyalg RSA -keysize 2048 `
+  -validity 3650 `
+  -keystore Device.p12 `
+  -storetype PKCS12 `
+  -storepass mosipface `
+  -keypass mosipface `
+  -dname "CN=Mock Iris Single Device, OU=MOSIP, O=MOSIP, L=Bangalore, ST=Karnataka, C=IN"
+#for rootca.cer:
+$certBytes = [System.IO.File]::ReadAllBytes("C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric Devices\rootca.cer")
+$base64 = [Convert]::ToBase64String($certBytes)
+Write-Host $base64
+#for rootcaftm.cer :
+cd "C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric Devices"
+# Backup old
+Rename-Item rootcaftm.cer rootcaftm_old.cer
+Rename-Item mosiprootcaftm.p12 mosiprootcaftm_old.p12
+# Generate new FTM root CA keystore valid 10 years
+& "C:\Users\olaghjibi\MOSIP\reg-client\jre\bin\keytool.exe" -genkeypair `
+  -alias mosipftm `
+  -keyalg RSA -keysize 2048 `
+  -validity 3650 `
+  -keystore mosiprootcaftm.p12 `
+  -storetype PKCS12 `
+  -storepass mosipftm `
+  -keypass mosipftm `
+  -ext BasicConstraints:critical=ca:true `
+  -dname "CN=MOSIP FTM Root CA, OU=mosip, O=mosip, L=Bangalore, ST=Karnataka, C=IN"
+# Export the certificate
+& "C:\Users\olaghjibi\MOSIP\reg-client\jre\bin\keytool.exe" -exportcert `
+  -alias mosipftm `
+  -keystore mosiprootcaftm.p12 `
+  -storetype PKCS12 `
+  -storepass mosipftm `
+  -file rootcaftm.cer `
+  -rfc
+$certBytes = [System.IO.File]::ReadAllBytes("C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric Devices\rootcaftm.cer")
+$base64 = [Convert]::ToBase64String($certBytes)
+Write-Host $base64
+
+------------------ On server :
+------------------------------
+# Get token
+TOKEN=$(docker exec kernel-keymanager-service curl -s -X POST \
+  "http://keycloak:8080/auth/realms/mosip/protocol/openid-connect/token" \
+  -d "client_id=mosip-admin-client&client_secret=mosip123&grant_type=client_credentials" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+# Upload rootca as trusted CA for DEVICE domain
+curl -s -X POST "http://172.19.34.65:8088/v1/keymanager/uploadCACertificate" \
+  -H "Cookie: Authorization=$TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "io.mosip.keymanager.uploadCACertificate",
+    "version": "1.0",
+    "requesttime": "2026-04-02T00:00:00.000Z",
+    "request": {
+      "certificateData": "PASTE_BASE64_HERE",
+      "partnerDomain": "DEVICE"
+    }
+  }'
+curl -s -X POST "http://172.19.34.65:8088/v1/keymanager/uploadCACertificate" \
+  -H "Cookie: Authorization=$TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"id\": \"io.mosip.keymanager.uploadCACertificate\",
+    \"version\": \"1.0\",
+    \"requesttime\": \"2026-04-02T00:00:00.000Z\",
+    \"request\": {
+      \"certificateData\": \"PASTE_BASE64_HERE\",
+      \"partnerDomain\": \"DEVICE\"
+    }
+  }"
+
+------------------ On windows :
+-------------------------------
+# setup-cert-chain.ps1:
+cd C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric\ Devices
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+& "C:\path\to\setup-cert-chain.ps1"
+# Upload Intermediate CA to Keymanager
+# Get the base64 of intermediate CA
+$certBytes = [System.IO.File]::ReadAllBytes("C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric Devices\mosipisca.cer")
+$base64 = [Convert]::ToBase64String($certBytes)
+Write-Host $base64
+$certBytes = [System.IO.File]::ReadAllBytes("C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric Devices\rootcaftm.cer")
+$base64Root = [Convert]::ToBase64String($certBytes)
+$base64Root | Out-File "C:\Users\olaghjibi\MOSIP\rootcaftm_base64.txt"
+# Do the same for intermediate
+$certBytes = [System.IO.File]::ReadAllBytes("C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric Devices\mosipisca.cer")
+$base64Intermediate = [Convert]::ToBase64String($certBytes)
+$base64Intermediate | Out-File "C:\Users\olaghjibi\MOSIP\mosipisca_base64.txt"
+Write-Host "Saved to files"
+
+------------------ On server :
+------------------------------
+# Get token
+TOKEN=$(docker exec kernel-keymanager-service curl -s -X POST \
+  "http://keycloak:8080/auth/realms/mosip/protocol/openid-connect/token" \
+  -d "client_id=mosip-admin-client&client_secret=mosip123&grant_type=client_credentials" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+# Upload intermediate CA
+curl -s -X POST "http://172.19.34.65:8088/v1/keymanager/uploadCACertificate" \
+  -H "Cookie: Authorization=$TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "io.mosip.keymanager.uploadCACertificate",
+    "version": "1.0",
+    "requesttime": "2026-04-02T00:00:00.000Z",
+    "request": {
+      "certificateData": "PASTE_BASE64_HERE",
+      "partnerDomain": "DEVICE"
+    }
+  }'
+TOKEN=$(docker exec kernel-keymanager-service curl -s -X POST \
+  "http://keycloak:8080/auth/realms/mosip/protocol/openid-connect/token" \
+  -d "client_id=mosip-admin-client&client_secret=mosip123&grant_type=client_credentials" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+curl -s -X POST "http://172.19.34.65:8088/v1/keymanager/uploadCACertificate" \
+  -H "Cookie: Authorization=$TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "io.mosip.keymanager.uploadCACertificate",
+    "version": "1.0",
+    "requesttime": "2026-04-02T12:00:00.000Z",
+    "request": {
+      "certificateData": "rootca",
+      "partnerDomain": "DEVICE"
+    }
+  }' | python3 -m json.tool
+curl -s -X POST "http://172.19.34.65:8088/v1/keymanager/uploadCACertificate" \
+  -H "Cookie: Authorization=$TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "io.mosip.keymanager.uploadCACertificate",
+    "version": "1.0",
+    "requesttime": "2026-04-02T12:00:00.000Z",
+    "request": {
+      "certificateData": "PASTE_MOSIPISCA_BASE64_HERE Intermidiate CA",
+      "partnerDomain": "DEVICE"
+    }
+  }' | python3 -m json.tool
+# Check if certificates were uploaded
+docker exec -i postgres psql -U postgres -d mosip_keymgr -c \
+  "SELECT id, domain, certificate_data FROM keymgr.ca_cert_store LIMIT 5;"
+
+------------------ On windows :
+-------------------------------
+cd "C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric Devices"
+# Export Root CA from mosiprootcaftm.p12
+& "C:\Users\olaghjibi\MOSIP\reg-client\jre\bin\keytool.exe" -export `
+  -alias mosipftm `
+  -keystore mosiprootcaftm.p12 `
+  -storetype PKCS12 `
+  -storepass mosipftm `
+  -file rootca_export.cer `
+  -rfc
+Write-Host "Root CA exported"
+# Export Intermediate CA from mosipisca.p12
+& "C:\Users\olaghjibi\MOSIP\reg-client\jre\bin\keytool.exe" -export `
+  -alias mosipisca `
+  -keystore mosipisca.p12 `
+  -storetype PKCS12 `
+  -storepass mosipftm `
+  -file intermediateca_export.cer `
+  -rfc
+Write-Host "Intermediate CA exported"
+$keytoolPath = "C:\Users\olaghjibi\MOSIP\reg-client\jre\bin\keytool.exe"
+$regClientPath = "C:\Users\olaghjibi\MOSIP\reg-client"
+$bioDevicesPath = "C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric Devices"
+# Stop registration client first
+Get-Process | Where-Object {$_.ProcessName -match "java.*registration"} | Stop-Process -Force
+Start-Sleep -Seconds 2
+# Import Root CA
+& $keytoolPath -import `
+  -alias mosip-root-ca `
+  -keystore "$regClientPath\jre\lib\security\cacerts" `
+  -storepass changeit `
+  -file "$bioDevicesPath\rootca_export.cer" `
+  -noprompt
+Write-Host "Root CA imported into cacerts"
+# Import Intermediate CA
+& $keytoolPath -import `
+  -alias mosip-intermediate-ca `
+  -keystore "$regClientPath\jre\lib\security\cacerts" `
+  -storepass changeit `
+  -file "$bioDevicesPath\intermediateca_export.cer" `
+  -noprompt
+Write-Host "Intermediate CA imported into cacerts"
+# Verify
+Write-Host "`nVerifying imports:"
+& $keytoolPath -list `
+  -keystore "$regClientPath\jre\lib\security\cacerts" `
+  -storepass changeit | grep -i mosip
+
+# Re-sign device certificates directly with ROOT CA (no intermediate)
+$keytoolPath = "C:\Users\olaghjibi\MOSIP\reg-client\jre\bin\keytool.exe"
+$basePath = "C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric Devices"
+$devices = @(
+    @{ name = "Iris Double"; path = "Iris\Double"; modality = "IRIS_DOUBLE" },
+    @{ name = "Iris Single"; path = "Iris\Single"; modality = "IRIS_SINGLE" },
+    @{ name = "Finger Slap"; path = "Finger\Slap"; modality = "FINGER_SLAP" },
+    @{ name = "Finger Single"; path = "Finger\Single"; modality = "FINGER_SINGLE" },
+    @{ name = "Face"; path = "Face"; modality = "FACE" }
+)
+foreach ($device in $devices) {
+    $devicePath = "$basePath\$($device.path)\Keys"
+    Write-Host "Processing: $($device.name)"
+    # Delete old device cert
+    Remove-Item "$devicePath\Device.p12" -Force
+    # Generate new device key
+    & $keytoolPath -genkeypair `
+      -alias Device `
+      -keyalg RSA -keysize 2048 `
+      -validity 3650 `
+      -keystore "$devicePath\Device.p12" `
+      -storetype PKCS12 `
+      -storepass mosipface `
+      -keypass mosipface `
+      -dname "CN=Mock $($device.name) Device, OU=MOSIP, O=MOSIP, L=Bangalore, S=Karnataka, C=IN"
+    # Create CSR
+    & $keytoolPath -certreq `
+      -alias Device `
+      -keystore "$devicePath\Device.p12" `
+      -storetype PKCS12 `
+      -storepass mosipface `
+      -file "$devicePath\Device.csr"
+    # Sign DIRECTLY with ROOT CA (not intermediate)
+    & $keytoolPath -gencert `
+      -alias mosipftm `
+      -keystore "$basePath\mosiprootcaftm.p12" `
+      -storetype PKCS12 `
+      -storepass mosipftm `
+      -infile "$devicePath\Device.csr" `
+      -outfile "$devicePath\Device.cer" `
+      -validity 3650 `
+      -rfc
+    # Import root CA
+    & $keytoolPath -import `
+      -alias mosipftm `
+      -keystore "$devicePath\Device.p12" `
+      -storetype PKCS12 `
+      -storepass mosipface `
+      -file "$basePath\rootcaftm.cer" `
+      -noprompt
+    # Import signed device cert
+    & $keytoolPath -import `
+      -alias Device `
+      -keystore "$devicePath\Device.p12" `
+      -storetype PKCS12 `
+      -storepass mosipface `
+      -file "$devicePath\Device.cer" `
+      -noprompt
+    Write-Host "✓ $($device.name) updated"
+}
+Write-Host "`nAll devices updated with ROOT CA signatures (no intermediate)"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---> MOSIP REG-MDM-108 Fix — Device Certificate Trust Path Validation Failed
+reg-client biometric scan fails with:
+REG-MDM-108 --> Certificate path trust validation failed
+Total Number of ROOT Trust Found: 0
+Total Number of INTERMEDIATE Trust Found: 0
+
+
+Root Cause
+The CA certificates uploaded via Keymanager are stored in mosip_keymgr.keymgr.ca_cert_store but syncdata reads from mosip_master.master.ca_cert_store. That table was empty, so reg-client never received the certs during sync.
+The correct upload path is via Partner Management API (which writes to both DBs). If you uploaded directly via Keymanager API, only mosip_keymgr gets the cert.
+
+On server :
+
+**Verify the problem:
+# Check certs exist in keymgr (should return rows)
+docker exec -i postgres psql -U postgres -d mosip_keymgr -c \
+  "SELECT cert_id, partner_domain, cert_not_before, cert_not_after 
+   FROM keymgr.ca_cert_store 
+   WHERE partner_domain='DEVICE' 
+   ORDER BY cr_dtimes DESC;"
+
+# Check master DB (will be empty — this is the bug)
+docker exec -i postgres psql -U masteruser -d mosip_master -c \
+  "SELECT cert_id, partner_domain FROM master.ca_cert_store WHERE partner_domain='DEVICE';"
+
+# Get token
+TOKEN=$(docker exec kernel-keymanager-service curl -s -X POST \
+  "http://keycloak:8080/auth/realms/mosip/protocol/openid-connect/token" \
+  -d "client_id=mosip-admin-client&client_secret=mosip123&grant_type=client_credentials" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# Confirm syncdata returns empty certificateDTOList
+curl -s "http://172.19.34.65:8089/v1/syncdata/getcacertificates?lastupdated=2020-01-01T00:00:00.000Z&version=1.2.0.1-B1" \
+  -H "Cookie: Authorization=$TOKEN" | python3 -m json.tool | head -20
+
+
+**Copy certs from keymgr to master:
+python3 << 'EOF'
+import subprocess
+import json
+
+# Use JSON output mode which is supported in PG10
+dump = subprocess.run(
+    ['docker', 'exec', '-i', 'postgres', 'psql', '-U', 'postgres', '-d', 'mosip_keymgr',
+     '-t', '-c',
+     """SELECT row_to_json(t) FROM (
+          SELECT cert_id, cert_subject, cert_issuer, issuer_id,
+                 cert_not_before, cert_not_after,
+                 COALESCE(crl_uri,'') as crl_uri, cert_data, 
+                 COALESCE(cert_thumbprint,'') as cert_thumbprint,
+                 COALESCE(cert_serial_no,'') as cert_serial_no, 
+                 partner_domain,
+                 COALESCE(cr_by,'system') as cr_by, cr_dtimes
+          FROM keymgr.ca_cert_store 
+          WHERE partner_domain='DEVICE'
+          ORDER BY cr_dtimes DESC
+        ) t"""],
+    capture_output=True, text=True
+)
+
+print("STDERR:", dump.stderr[:200])
+
+rows = []
+for line in dump.stdout.strip().split('\n'):
+    line = line.strip()
+    if line:
+        try:
+            rows.append(json.loads(line))
+        except:
+            pass
+
+print(f"Found {len(rows)} certs")
+
+for r in rows:
+    cert_data_escaped = r['cert_data'].replace("'", "''")
+    sql = f"""INSERT INTO master.ca_cert_store (
+  cert_id, cert_subject, cert_issuer, issuer_id,
+  cert_not_before, cert_not_after, crl_uri, cert_data,
+  cert_thumbprint, cert_serial_no, partner_domain,
+  cr_by, cr_dtimes, is_deleted
+) VALUES (
+  '{r['cert_id']}', '{r['cert_subject']}', '{r['cert_issuer']}', '{r['issuer_id']}',
+  '{r['cert_not_before']}', '{r['cert_not_after']}', '{r['crl_uri']}', '{cert_data_escaped}',
+  '{r['cert_thumbprint']}', '{r['cert_serial_no']}', '{r['partner_domain']}',
+  '{r['cr_by']}', '{r['cr_dtimes']}', false
+) ON CONFLICT (cert_id) DO NOTHING;"""
+
+    result = subprocess.run(
+        ['docker', 'exec', '-i', 'postgres', 'psql', '-U', 'masteruser', '-d', 'mosip_master', '-c', sql],
+        capture_output=True, text=True
+    )
+    if 'ERROR' in result.stderr or 'ERROR' in result.stdout:
+        print(f"FAILED {r['cert_id']}: {result.stderr}{result.stdout}")
+    else:
+        print(f"OK: {r['cert_id']}")
+
+print("Done!")
+EOF
+
+
+**Verify the fix
+# Confirm certs are now in master
+docker exec -i postgres psql -U masteruser -d mosip_master -c \
+  "SELECT cert_id, partner_domain, cert_not_before, cert_not_after 
+   FROM master.ca_cert_store WHERE partner_domain='DEVICE';"
+
+# Confirm syncdata now returns certs (certificateDTOList should NOT be empty)
+TOKEN=$(docker exec kernel-keymanager-service curl -s -X POST \
+  "http://keycloak:8080/auth/realms/mosip/protocol/openid-connect/token" \
+  -d "client_id=mosip-admin-client&client_secret=mosip123&grant_type=client_credentials" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl -s "http://172.19.34.65:8089/v1/syncdata/getcacertificates?lastupdated=2020-01-01T00:00:00.000Z&version=1.2.0.1-B1" \
+  -H "Cookie: Authorization=$TOKEN" | python3 -m json.tool | head -20
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Summary :
+
+Excellent! You found the real issue! Let me document **ALL the steps** to resolve this problem from scratch for future reference.
+
+---
+
+# 📋 MOSIP REG-MDM-108 Fix — Complete Solution Guide
+
+## Problem Summary
+```
+REG-MDM-108 --> Certificate path trust validation failed
+Total Number of ROOT Trust Found: 0
+Total Number of INTERMEDIATE Trust Found: 0
+```
+
+**Root Cause**: CA certificates uploaded via Keymanager API go to `mosip_keymgr.keymgr.ca_cert_store`, but syncdata service reads from `mosip_master.master.ca_cert_store`. Registration client never receives certs during sync.
+
+---
+
+## Step 1: Generate Device Certificates with ROOT CA (No Intermediate)
+
+### Prerequisites
+- Java keytool available
+- Root CA keystore: `mosiprootcaftm.p12` (password: `mosipftm`)
+- Device keystores in: `Biometric Devices/{modality}/Keys/Device.p12`
+
+### Generate New Device Certificates
+
+```powershell
+# On Windows Machine
+
+$keytoolPath = "C:\Users\olaghjibi\MOSIP\reg-client\jre\bin\keytool.exe"
+$basePath = "C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric Devices"
+
+$devices = @(
+    @{ name = "Iris Double"; path = "Iris\Double"; modality = "IRIS_DOUBLE" },
+    @{ name = "Iris Single"; path = "Iris\Single"; modality = "IRIS_SINGLE" },
+    @{ name = "Finger Slap"; path = "Finger\Slap"; modality = "FINGER_SLAP" },
+    @{ name = "Finger Single"; path = "Finger\Single"; modality = "FINGER_SINGLE" },
+    @{ name = "Face"; path = "Face"; modality = "FACE" }
+)
+
+foreach ($device in $devices) {
+    $devicePath = "$basePath\$($device.path)\Keys"
+    Write-Host "Processing: $($device.name)"
+    
+    # Delete old device cert
+    Remove-Item "$devicePath\Device.p12" -Force -ErrorAction SilentlyContinue
+    
+    # Generate new device key with EXPLICIT 3650 days validity
+    & $keytoolPath -genkeypair `
+      -alias Device `
+      -keyalg RSA -keysize 2048 `
+      -validity 3650 `
+      -keystore "$devicePath\Device.p12" `
+      -storetype PKCS12 `
+      -storepass mosipface `
+      -keypass mosipface `
+      -dname "CN=Mock $($device.name) Device, OU=MOSIP, O=MOSIP, L=Bangalore, S=Karnataka, C=IN"
+    
+    # Create CSR
+    & $keytoolPath -certreq `
+      -alias Device `
+      -keystore "$devicePath\Device.p12" `
+      -storetype PKCS12 `
+      -storepass mosipface `
+      -file "$devicePath\Device.csr"
+    
+    # Sign DIRECTLY with ROOT CA (2-tier chain, no intermediate)
+    & $keytoolPath -gencert `
+      -alias mosipftm `
+      -keystore "$basePath\mosiprootcaftm.p12" `
+      -storetype PKCS12 `
+      -storepass mosipftm `
+      -infile "$devicePath\Device.csr" `
+      -outfile "$devicePath\Device.cer" `
+      -validity 3650 `
+      -rfc
+    
+    # Import root CA
+    & $keytoolPath -import `
+      -alias mosipftm `
+      -keystore "$devicePath\Device.p12" `
+      -storetype PKCS12 `
+      -storepass mosipface `
+      -file "$basePath\rootcaftm.cer" `
+      -noprompt
+    
+    # Import signed device cert
+    & $keytoolPath -import `
+      -alias Device `
+      -keystore "$devicePath\Device.p12" `
+      -storetype PKCS12 `
+      -storepass mosipface `
+      -file "$devicePath\Device.cer" `
+      -noprompt
+    
+    Write-Host "✓ $($device.name) updated"
+}
+
+Write-Host "`n✅ All devices updated with ROOT CA signatures"
+```
+
+### Verify Certificate Dates
+
+```powershell
+$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
+    "C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target\Biometric Devices\Iris\Double\Keys\Device.p12",
+    "mosipface"
+)
+
+Write-Host "Subject: $($cert.Subject)"
+Write-Host "Issuer: $($cert.Issuer)"
+Write-Host "NotBefore: $($cert.NotBefore)"
+Write-Host "NotAfter: $($cert.NotAfter)"
+Write-Host "Today: $(Get-Date)"
+Write-Host "Certificate is VALID: $($cert.NotBefore -le (Get-Date) -and (Get-Date) -le $cert.NotAfter)"
+```
+
+**Expected Output:**
+```
+Subject: CN=Mock Iris Double Device, OU=MOSIP, O=MOSIP, L=Bangalore, S=Karnataka, C=IN
+Issuer: CN=MOSIP FTM Root CA, OU=mosip, O=mosip, L=Bangalore, S=Karnataka, C=IN
+NotBefore: 04/02/2026 15:37:23
+NotAfter: 03/30/2036 15:37:23
+Certificate is VALID: True
+```
+
+---
+
+## Step 2: Upload ROOT CA to Keymanager
+
+### Get Authentication Token
+
+```bash
+# On Linux Server
+TOKEN=$(docker exec kernel-keymanager-service curl -s -X POST \
+  "http://keycloak:8080/auth/realms/mosip/protocol/openid-connect/token" \
+  -d "client_id=mosip-admin-client&client_secret=mosip123&grant_type=client_credentials" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+echo "Token: $TOKEN"
+```
+
+### Export ROOT CA to Base64
+
+```bash
+# Export Root CA certificate
+docker exec -i postgres psql -U postgres -d mosip_keymgr -c \
+  "SELECT cert_data FROM keymgr.ca_cert_store WHERE cert_id IS NOT NULL LIMIT 1;" > /tmp/rootca.txt
+
+# Or manually export from keystore
+keytool -export -alias mosipftm \
+  -keystore mosiprootcaftm.p12 \
+  -storetype PKCS12 \
+  -storepass mosipftm \
+  -file rootca.cer \
+  -rfc
+
+# Convert to base64
+cat rootca.cer | base64 -w 0 > rootca_base64.txt
+```
+
+### Upload to Keymanager
+
+```bash
+TOKEN=$(docker exec kernel-keymanager-service curl -s -X POST \
+  "http://keycloak:8080/auth/realms/mosip/protocol/openid-connect/token" \
+  -d "client_id=mosip-admin-client&client_secret=mosip123&grant_type=client_credentials" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl -s -X POST "http://172.19.34.65:8088/v1/keymanager/uploadCACertificate" \
+  -H "Cookie: Authorization=$TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "io.mosip.keymanager.uploadCACertificate",
+    "version": "1.0",
+    "requesttime": "2026-04-02T13:00:00.000Z",
+    "request": {
+      "certificateData": "'"$(cat rootca_base64.txt)"'",
+      "partnerDomain": "DEVICE"
+    }
+  }' | python3 -m json.tool
+```
+
+**Expected Response:**
+```json
+{
+    "id": "io.mosip.keymanager.uploadCACertificate",
+    "version": "1.0",
+    "responsetime": "2026-04-02T13:18:30.613Z",
+    "response": null,
+    "errors": null
+}
+```
+
+---
+
+## Step 3: ⚠️ **CRITICAL FIX** — Copy Certs from keymgr to master DB
+
+This is the **KEY STEP** that resolves REG-MDM-108!
+
+### Verify the Problem
+
+```bash
+# Certs in keymgr (will have rows)
+docker exec -i postgres psql -U postgres -d mosip_keymgr -c \
+  "SELECT cert_id, partner_domain FROM keymgr.ca_cert_store WHERE partner_domain='DEVICE';"
+
+# Certs in master (will be EMPTY — this is the bug!)
+docker exec -i postgres psql -U masteruser -d mosip_master -c \
+  "SELECT cert_id, partner_domain FROM master.ca_cert_store WHERE partner_domain='DEVICE';"
+```
+
+### Copy Certificates Using Python Script
+
+```bash
+# On Linux Server
+python3 << 'EOF'
+import subprocess
+import json
+
+print("🔄 Fetching certificates from mosip_keymgr...")
+
+# Get certs from keymgr
+dump = subprocess.run(
+    ['docker', 'exec', '-i', 'postgres', 'psql', '-U', 'postgres', '-d', 'mosip_keymgr',
+     '-t', '-c',
+     """SELECT row_to_json(t) FROM (
+          SELECT cert_id, cert_subject, cert_issuer, issuer_id,
+                 cert_not_before, cert_not_after,
+                 COALESCE(crl_uri,'') as crl_uri, cert_data, 
+                 COALESCE(cert_thumbprint,'') as cert_thumbprint,
+                 COALESCE(cert_serial_no,'') as cert_serial_no, 
+                 partner_domain,
+                 COALESCE(cr_by,'system') as cr_by, cr_dtimes
+          FROM keymgr.ca_cert_store 
+          WHERE partner_domain='DEVICE'
+          ORDER BY cr_dtimes DESC
+        ) t"""],
+    capture_output=True, text=True
+)
+
+rows = []
+for line in dump.stdout.strip().split('\n'):
+    line = line.strip()
+    if line:
+        try:
+            rows.append(json.loads(line))
+        except:
+            pass
+
+print(f"✅ Found {len(rows)} DEVICE certificates")
+
+if len(rows) == 0:
+    print("❌ No DEVICE certificates found in keymgr!")
+    exit(1)
+
+# Insert into master
+for r in rows:
+    cert_data_escaped = r['cert_data'].replace("'", "''")
+    sql = f"""INSERT INTO master.ca_cert_store (
+  cert_id, cert_subject, cert_issuer, issuer_id,
+  cert_not_before, cert_not_after, crl_uri, cert_data,
+  cert_thumbprint, cert_serial_no, partner_domain,
+  cr_by, cr_dtimes, is_deleted
+) VALUES (
+  '{r['cert_id']}', '{r['cert_subject']}', '{r['cert_issuer']}', '{r['issuer_id']}',
+  '{r['cert_not_before']}', '{r['cert_not_after']}', '{r['crl_uri']}', '{cert_data_escaped}',
+  '{r['cert_thumbprint']}', '{r['cert_serial_no']}', '{r['partner_domain']}',
+  '{r['cr_by']}', '{r['cr_dtimes']}', false
+) ON CONFLICT (cert_id) DO NOTHING;"""
+
+    result = subprocess.run(
+        ['docker', 'exec', '-i', 'postgres', 'psql', '-U', 'masteruser', '-d', 'mosip_master', '-c', sql],
+        capture_output=True, text=True
+    )
+    if 'ERROR' in result.stderr or 'ERROR' in result.stdout:
+        print(f"❌ FAILED {r['cert_id']}: {result.stderr}")
+    else:
+        print(f"✅ OK: {r['cert_id']}")
+
+print("✅ All certificates copied!")
+EOF
+```
+
+### Verify the Fix
+
+```bash
+# Confirm certs are NOW in master
+docker exec -i postgres psql -U masteruser -d mosip_master -c \
+  "SELECT cert_id, partner_domain, cert_not_before, cert_not_after 
+   FROM master.ca_cert_store WHERE partner_domain='DEVICE';"
+
+# Should return 3 rows with DEVICE domain
+```
+
+---
+
+## Step 4: Verify Syncdata Returns Certificates
+
+```bash
+TOKEN=$(docker exec kernel-keymanager-service curl -s -X POST \
+  "http://keycloak:8080/auth/realms/mosip/protocol/openid-connect/token" \
+  -d "client_id=mosip-admin-client&client_secret=mosip123&grant_type=client_credentials" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl -s "http://172.19.34.65:8089/v1/syncdata/getcacertificates?lastupdated=2020-01-01T00:00:00.000Z&version=1.2.0.1-B1" \
+  -H "Cookie: Authorization=$TOKEN" | python3 -m json.tool | head -30
+```
+
+**Expected**: `certificateDTOList` should NOT be empty, should contain your ROOT CA certificates.
+
+---
+
+## Step 5: Restart Services
+
+```bash
+# Restart keymanager to reload certs
+docker-compose -f /home/mosip/mx-id-mosip/docker-compose.yml down kernel-keymanager-service
+sleep 10
+docker-compose -f /home/mosip/mx-id-mosip/docker-compose.yml up -d kernel-keymanager-service
+sleep 30
+
+# On Windows - restart Mock MDS and Reg Client
+Get-Process | Where-Object {$_.ProcessName -match "java"} | Stop-Process -Force
+Start-Sleep -Seconds 5
+
+# Terminal 1
+cd "C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-reg\target"
+./run.bat
+
+# Terminal 2
+cd "C:\Users\olaghjibi\MOSIP\mock-mds\collab-mock-mds-auth\target"
+./run.bat
+
+# Terminal 3
+cd "C:\Users\olaghjibi\MOSIP\reg-client"
+./run.bat
+```
+
+---
+
+## Step 6: Test Biometric Scanning
+
+1. Log into registration client
+2. Go to **Onboarding**
+3. Try to scan biometrics (Iris/Fingerprint/Face)
+4. Check logs for:
+   - ✅ `Devices found on port 4501`
+   - ✅ `Total Number of ROOT Trust Found: 1`
+   - ✅ **NO ERROR** about certificate validation
+
+---
+
+## 📊 Summary Table
+
+| Step | Action | Location | Status |
+|------|--------|----------|--------|
+| 1 | Generate device certs signed by ROOT CA | Windows (keytool) | ✅ |
+| 2 | Upload ROOT CA to keymanager | Linux (curl) | ✅ |
+| 3 | **Copy certs from keymgr to master DB** | Linux (Python script) | ⚠️ **CRITICAL** |
+| 4 | Verify syncdata returns certs | Linux (curl) | ✅ |
+| 5 | Restart all services | Both machines | ✅ |
+| 6 | Test biometric scanning | Windows (reg-client) | ✅ |
+
+---
+
+## 🔑 Key Takeaways
+
+1. **Always check BOTH databases**: `mosip_keymgr.keymgr.ca_cert_store` AND `mosip_master.master.ca_cert_store`
+2. **Syncdata reads from master**, not keymgr
+3. **Use 2-tier certificate chain**: ROOT → Device (no intermediate needed)
+4. **Always verify certificate dates** are valid: `NotBefore < Today < NotAfter`
+5. **The Python copy script is essential** to make syncdata aware of DEVICE certificates
+
+---
+
+Save this entire document! This is your complete solution. 🎯
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+auth :
+# Copy updated CA certs from reg to auth
+cp "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-reg/target/Biometric Devices/mosiprootcaftm.p12" \
+   "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-auth/target/Biometric Devices/"
+
+cp "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-reg/target/Biometric Devices/rootcaftm.cer" \
+   "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-auth/target/Biometric Devices/"
+
+cp "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-reg/target/Biometric Devices/mosipisca.p12" \
+   "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-auth/target/Biometric Devices/"
+
+cp "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-reg/target/Biometric Devices/mosipisca.cer" \
+   "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-auth/target/Biometric Devices/"
+
+cp "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-reg/target/Biometric Devices/intermediateca_export.cer" \
+   "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-auth/target/Biometric Devices/"
+
+# Also copy MosipTestCert (the JWT signing cert used by mock MDS)
+cp "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-reg/target/files/keys/MosipTestCert.pem" \
+   "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-auth/target/files/keys/"
+
+cp "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-reg/target/files/keys/PrivateKey.pem" \
+   "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-auth/target/files/keys/"
+
+cp "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-reg/target/files/keys/PublicKey.pem" \
+   "/c/Users/olaghjibi/MOSIP/mock-mds/collab-mock-mds-auth/target/files/keys/"
