@@ -1,0 +1,39 @@
+
+----------------------------------------------------------------------------------------------------------> 1. WSL (Personal Computers)
+# kubectl
+# helm
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+    helm version
+# helm repos
+    helm repo add bitnami https://charts.bitnami.com/bitnami
+    helm repo add mosip https://mosip.github.io/mosip-helm
+# Istioctl : version: 1.15.0
+    curl -L https://github.com/istio/istio/releases/download/1.15.0/istioctl-1.15.0-linux-amd64.tar.gz -o istioctl.tar.gz
+    tar -xvf istioctl.tar.gz
+    sudo mv istioctl /usr/local/bin/
+    sudo chmod +x /usr/local/bin/istioctl
+    istioctl version
+# rke : version: 1.3.10
+Ansible: version > 2.12.4
+    pipx install --include-deps ansible
+    pipx install ansible-core
+    pipx ensurepath
+    # close and reopen terminal
+    ansible --version
+    ansible-playbook --version
+# MOSIP Repositories
+cd ~ & mkdir mosip & cd mosip
+git clone https://github.com/mosip/k8s-infra -b v1.2.0.1
+git clone https://github.com/mosip/mosip-infra -b v1.2.0.1
+# Set Environment Variables
+nano ~/.bashrc
+export MOSIP_ROOT=/home/olaghjibi/mosip
+export K8_ROOT=$MOSIP_ROOT/k8s-infra
+export INFRA_ROOT=$MOSIP_ROOT/mosip-infra
+source ~/.bashrc
+
+
+
+
+
+
