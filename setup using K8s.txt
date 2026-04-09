@@ -110,9 +110,7 @@ cp $K8_ROOT/mosip/on-prem/cluster.rkestate \
 chmod 400 ~/mosip-cluster-backup/$(date +%Y%m%d)/*
 ls -lh ~/mosip-cluster-backup/$(date +%Y%m%d)/
 
-
-
-
+----------------------------------------------------------------------------------------------------------> 8. Configure DNS for Cluster (WSL)
 kubectl -n kube-system get pods -l k8s-app=kube-dns
 kubectl -n kube-system edit cm coredns
 # forward and hosts :
@@ -170,3 +168,79 @@ sudo tee -a /etc/hosts <<EOF
 172.19.34.65    sandbox.xyz.net healthservices.sandbox.xyz.net
 EOF
 # Windows — open C:\Windows\System32\drivers\etc\hosts as Administrator and add the same lines.
+
+----------------------------------------------------------------------------------------------------------> 9. MOSIP K8 Cluster Global configmap, Ingress and Storage Class setup (WSL)
+cd $K8_ROOT/mosip
+sed -i 's/mosip-version: develop/mosip-version: 1.2.0.1/' $K8_ROOT/mosip/global_configmap.yaml
+kubectl apply -f global_configmap.yaml
+sed -i 's/proxyProtocol:/proxyProtocol:\n  #disabled for single-node/' \
+  $K8_ROOT/mosip/on-prem/istio/chart/istio-addons/values.yaml
+cd $K8_ROOT/mosip/on-prem/istio
+./install.sh
+kubectl get svc -n istio-system
+cd $K8_ROOT/longhorn
+./pre_install.sh
+kubectl get pods -n longhorn-system -w
+./install.sh
+kubectl get pods -n longhorn-system -w
+
+ssh mosip@172.19.34.65
+sudo apt-get install -y multipath-tools
+sudo systemctl enable multipathd
+sudo systemctl start multipathd
+ls -la /etc/multipath.conf
+exit
+
+ansible-playbook -i $K8_ROOT/mosip/on-prem/hosts.ini multipath-conf.yaml
+
+
+----------------------------------------------------------------------------------------------------------> 10. MOSIP K8 cluster Nginx server setup (WSL)
+ssh mosip@172.19.34.65
+docker volume create --name gensslcerts --opt type=none --opt device=/etc/ssl --opt o=bind
+docker run -it \
+  --mount type=volume,src='gensslcerts',dst=/home/mosip/ssl,volume-driver=local \
+  -e VALIDITY=700 \
+  -e COUNTRY=MA \
+  -e STATE=Casablanca \
+  -e LOCATION=Casablanca \
+  -e ORG=M2MGroup \
+  -e ORG_UNIT=MOSIP \
+  -e COMMON_NAME=*.sandbox.xyz.net \
+  mosipdev/openssl:latest
+sudo ls -lh /etc/ssl/certs/nginx-selfsigned.crt
+sudo ls -lh /etc/ssl/private/nginx-selfsigned.key
+mkdir -p ~/mosip
+cd ~/mosip
+git clone https://github.com/mosip/k8s-infra -b v1.2.0.1
+exit
+
+cd $K8_ROOT/mosip/on-prem/nginx
+ansible-playbook -i $K8_ROOT/mosip/on-prem/hosts.ini nginx_ports.yaml
+scp $K8_ROOT/mosip/on-prem/nginx/nginx.conf mosip@172.19.34.65:~/mosip/k8s-infra/mosip/on-prem/nginx/nginx.conf
+
+ssh mosip@172.19.34.65
+cd ~/mosip/k8s-infra/mosip/on-prem/nginx
+sudo ./install.sh
+MOSIP nginx server internal ip172.19.34.65
+MOSIP nginx server public ip172.19.34.65
+Publicly accessible domains*.sandbox.xyz.net
+SSL cert path/etc/ssl/certs/nginx-selfsigned.crt
+SSL key path/etc/ssl/private/nginx-selfsigned.key
+Cluster node IPs172.19.34.65
+30081 -> 30080
+# udapte : /etc/nginx/nginx.conf 
+sudo nginx -t && sudo systemctl reload nginx
+sudo systemctl restart nginx
+sudo tee -a /etc/hosts << 'EOF'
+172.19.34.65    api.sandbox.xyz.net resident.sandbox.xyz.net esignet.sandbox.xyz.net prereg.sandbox.xyz.net healthservices.sandbox.xyz.net
+172.19.34.65    sandbox.xyz.net api-internal.sandbox.xyz.net activemq.sandbox.xyz.net kibana.sandbox.xyz.net regclient.sandbox.xyz.net admin.sandbox.xyz.net minio.sandbox.xyz.net iam.sandbox.xyz.net kafka.sandbox.xyz.net postgres.sandbox.xyz.net pmp.sandbox.xyz.net onboarder.sandbox.xyz.net smtp.sandbox.xyz.net compliance.sandbox.xyz.net
+EOF
+exit
+
+sudo sed -i 's/172.19.34.65    sandbox.xyz.net healthservices.sandbox.xyz.net/172.19.34.65    sandbox.xyz.net healthservices.sandbox.xyz.net postgres.sandbox.xyz.net/' /etc/hosts
+# Windows — open C:\Windows\System32\drivers\etc\hosts as Administrator and add the same lines : 172.19.34.65    postgres.sandbox.xyz.net
+cd $K8_ROOT/utils/httpbin
+./install.sh
+curl -k https://api.sandbox.xyz.net/httpbin/get?show_env=true
+curl -k https://api-internal.sandbox.xyz.net/httpbin/get?show_env=true
+
