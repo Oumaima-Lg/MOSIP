@@ -1,6 +1,10 @@
 
-----------------------------------------------------------------------------------------------------------> 1. WSL (Personal Computers)
+----------------------------------------------------------------------------------------------------------> 1. Tools Installation (WSL)
 # kubectl
+    curl -LO https://dl.k8s.io/release/v1.23.17/bin/linux/amd64/kubectl
+    chmod +x kubectl
+    sudo mv kubectl /usr/local/bin/
+    kubectl version --client
 # helm
     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
     helm version
@@ -14,6 +18,11 @@
     sudo chmod +x /usr/local/bin/istioctl
     istioctl version
 # rke : version: 1.3.10
+    wget https://github.com/rancher/rke/releases/download/v1.3.10/rke_linux-amd64
+    mv rke_linux-amd64 rke
+    chmod +x rke
+    sudo mv rke /usr/local/bin/
+    rke --version
 Ansible: version > 2.12.4
     pipx install --include-deps ansible
     pipx install ansible-core
@@ -27,13 +36,137 @@ git clone https://github.com/mosip/k8s-infra -b v1.2.0.1
 git clone https://github.com/mosip/mosip-infra -b v1.2.0.1
 # Set Environment Variables
 nano ~/.bashrc
-export MOSIP_ROOT=/home/olaghjibi/mosip
-export K8_ROOT=$MOSIP_ROOT/k8s-infra
-export INFRA_ROOT=$MOSIP_ROOT/mosip-infra
+    export MOSIP_ROOT=/home/olaghjibi/mosip
+    export K8_ROOT=$MOSIP_ROOT/k8s-infra
+    export INFRA_ROOT=$MOSIP_ROOT/mosip-infra
 source ~/.bashrc
 
+----------------------------------------------------------------------------------------------------------> 2. SSH Key Generation and Copying to Server (WSL)
+# SSH Key Generation and Copying to Server
+ssh-keygen -t rsa -b 4096
+ssh-copy-id mosip@172.19.34.65
+ssh mosip@172.19.34.65
+# Set Permissions for SSH Key
+ls -l ~/.ssh/id_rsa
+chmod 400 ~/.ssh/id_rsa
+ls -l ~/.ssh/id_rsa
+
+----------------------------------------------------------------------------------------------------------> 3. Docker Log Rotation (Server)
+# Docker Log Rotation
+sudo nano /etc/docker/daemon.json
+    {
+    "log-driver": "json-file",
+    "log-opts": {
+        "max-size": "10m",
+        "max-file": "3"
+    }
+    }
+sudo systemctl restart docker
+# To clear existing logs and free up space, you can truncate the log files:
+sudo find /var/lib/docker/containers/ -type f -name "*.log" -exec truncate -s 0 {} +
+
+----------------------------------------------------------------------------------------------------------> 4. Granting Sudo Privileges to User 'mosip' (Server)
+sudo visudo
+    mosip ALL=(ALL) NOPASSWD:ALL
+
+----------------------------------------------------------------------------------------------------------> 5. Ansible Playbooks Execution (WSL)
+cd $K8_ROOT/mosip/on-prem
+cp hosts.ini.sample hosts.ini
+# Update hosts.ini with the server's IP address and user details
+    [cluster]
+    node1 ansible_host=172.19.34.65 ansible_user=mosip ansible_ssh_private_key_file=~/.ssh/id_rsa
+ansible-playbook -i hosts.ini env-check.yaml
+ansible-playbook -i hosts.ini ports.yaml
+ansible-playbook -i hosts.ini swap.yaml
+
+----------------------------------------------------------------------------------------------------------> 5. Swap bridge-nf-call-iptables (Server)
+sudo modprobe overlay
+sudo modprobe br_netfilter
+echo -e "overlay\nbr_netfilter" | sudo tee /etc/modules-load.d/k8s.conf
+sudo sysctl -w net.bridge.bridge-nf-call-iptables=1
+sudo sysctl -w net.bridge.bridge-nf-call-ip6tables=1
+sudo sysctl -w net.ipv4.ip_forward=1
+free -h
+
+----------------------------------------------------------------------------------------------------------> 6. Initialize Kubernetes Cluster (WSL)
+rke up --config cluster.yaml
+mkdir -p $HOME/.kube
+cp $K8_ROOT/mosip/on-prem/kube_config_cluster.yaml $HOME/.kube/mosip-sandbox_config
+chmod 400 $HOME/.kube/mosip-sandbox_config
+export KUBECONFIG=$HOME/.kube/mosip-sandbox_config
+echo "export KUBECONFIG=$HOME/.kube/mosip-sandbox_config" >> ~/.bashrc
+source ~/.bashrc
+kubectl get nodes
+kubectl get pods -A
+
+----------------------------------------------------------------------------------------------------------> 7. Backup Cluster Configuration (WSL)
+mkdir -p ~/mosip-cluster-backup/$(date +%Y%m%d)
+cp $K8_ROOT/mosip/on-prem/cluster.yaml \
+   ~/mosip-cluster-backup/$(date +%Y%m%d)/
+cp $K8_ROOT/mosip/on-prem/kube_config_cluster.yaml \
+   ~/mosip-cluster-backup/$(date +%Y%m%d)/
+cp $K8_ROOT/mosip/on-prem/cluster.rkestate \
+   ~/mosip-cluster-backup/$(date +%Y%m%d)/
+chmod 400 ~/mosip-cluster-backup/$(date +%Y%m%d)/*
+ls -lh ~/mosip-cluster-backup/$(date +%Y%m%d)/
 
 
 
 
-
+kubectl -n kube-system get pods -l k8s-app=kube-dns
+kubectl -n kube-system edit cm coredns
+# forward and hosts :
+    data:
+    Corefile: |
+        .:53 {
+            errors
+            health {
+            lameduck 5s
+            }
+            ready
+            kubernetes cluster.local in-addr.arpa ip6.arpa {
+            pods insecure
+            fallthrough in-addr.arpa ip6.arpa
+            ttl 30
+            }
+            hosts {
+            172.19.34.65    api.mosip.net
+            172.19.34.65    api-internal.mosip.net
+            172.19.34.65    keycloak.mosip.net
+            172.19.34.65    keycloak-internal.mosip.net
+            172.19.34.65    admin.mosip.net
+            172.19.34.65    prereg.mosip.net
+            172.19.34.65    resident.mosip.net
+            172.19.34.65    idp.mosip.net
+            172.19.34.65    mosip-minio.mosip.net
+            172.19.34.65    mosip-kafka.mosip.net
+            fallthrough
+            }
+            prometheus :9153
+            forward . /etc/resolv.conf
+            cache 30
+            loop
+            reload
+            loadbalance
+        }
+# Vi commands:
+    i → enter insert mode
+    Navigate with arrow keys, add the hosts { } block
+    Esc → exit insert mode
+    :wq → save and quit
+kubectl -n kube-system get cm coredns -o yaml
+kubectl -n kube-system rollout restart deploy coredns coredns-autoscaler
+kubectl -n kube-system rollout status deploy coredns
+kubectl -n kube-system rollout status deploy coredns-autoscaler
+sudo tee -a /etc/hosts <<EOF
+172.19.34.65    api.sandbox.xyz.net api-internal.sandbox.xyz.net
+172.19.34.65    resident.sandbox.xyz.net esignet.sandbox.xyz.net
+172.19.34.65    prereg.sandbox.xyz.net admin.sandbox.xyz.net
+172.19.34.65    minio.sandbox.xyz.net iam.sandbox.xyz.net
+172.19.34.65    regclient.sandbox.xyz.net pmp.sandbox.xyz.net
+172.19.34.65    onboarder.sandbox.xyz.net compliance.sandbox.xyz.net
+172.19.34.65    activemq.sandbox.xyz.net kafka.sandbox.xyz.net
+172.19.34.65    kibana.sandbox.xyz.net smtp.sandbox.xyz.net
+172.19.34.65    sandbox.xyz.net healthservices.sandbox.xyz.net
+EOF
+# Windows — open C:\Windows\System32\drivers\etc\hosts as Administrator and add the same lines.
