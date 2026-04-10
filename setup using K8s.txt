@@ -244,3 +244,86 @@ cd $K8_ROOT/utils/httpbin
 curl -k https://api.sandbox.xyz.net/httpbin/get?show_env=true
 curl -k https://api-internal.sandbox.xyz.net/httpbin/get?show_env=true
 
+
+
+
+----------------------------------------------------------------------------------------------------------> 11. 
+cd $INFRA_ROOT/deployment/v3/external/postgres
+./install.sh
+
+# Current Postgres password: ORJALg59ID
+
+sed -i 's/dbuserPassword: ""/dbuserPassword: "mosip123"/' \
+  $INFRA_ROOT/deployment/v3/external/postgres/init_values.yaml
+
+# postgres  | (superuser)ORJALg59IDDB | admin only
+# mosipuser | (app user)mosip123      | All MOSIP services
+
+cd $INFRA_ROOT/deployment/v3/external/postgres
+./init_db.sh
+
+┌─────────────────────────────────────────┐
+│         MOSIP Database Credentials      │
+├─────────────────┬───────────────────────┤
+│ Superuser       │ postgres              │
+│ Super Password  │ ORJALg59ID            │
+├─────────────────┼───────────────────────┤
+│ App User        │ mosipuser             │
+│ App Password    │ mosip123              │
+├─────────────────┼───────────────────────┤
+│ Host (internal) │ postgres-postgresql   │
+│ Port            │ 5432                  │
+└─────────────────┴───────────────────────┘
+
+sed -i 's/serviceDiscovery:/serviceDiscovery:\n  #disabled for single replica/' \
+  $INFRA_ROOT/deployment/v3/external/iam/values.yaml
+
+cd $INFRA_ROOT/deployment/v3/external/iam
+./install.sh
+
+# Keycloak admin password: 2evBAeKQkP
+
+┌────────────────────────────────────────────────┐
+│           MOSIP Credentials                    │
+├─────────────────┬──────────────────────────────┤
+│ Postgres super  │ ORJALg59ID                   │
+│ Postgres app    │ mosip123                     │
+├─────────────────┼──────────────────────────────┤
+│ Keycloak admin  │ admin / 2evBAeKQkP           │
+│ Keycloak URL    │ https://iam.sandbox.xyz.net  │
+└─────────────────┴──────────────────────────────┘
+
+ssh mosip@172.19.34.65
+sudo sed -i 's/upstream myInternalIngressUpstream {/upstream myInternalIngressUpstream {/' /etc/nginx/nginx.conf
+sudo sed -i '/myInternalIngressUpstream/{n;s/server 172.19.34.65:30080/server 172.19.34.65:31080/}' /etc/nginx/nginx.conf
+sudo nginx -t && sudo systemctl reload nginx
+exit
+
+cd $INFRA_ROOT/deployment/v3/external/iam
+./keycloak_init.sh
+
+# SMTP host          → smtp.sandbox.xyz.net
+# SMTP port          → 25
+# From email         → mosip@sandbox.xyz.net
+# starttls           → false
+# authentication     → false
+# SSL                → false
+
+cd $INFRA_ROOT/deployment/v3/external/hsm/softhsm
+./install.sh
+
+sed -i 's/helm -n minio install minio mosip\/minio --version 10.1.6/helm -n minio install minio mosip\/minio --version 10.1.6 -f values.yaml/' \
+  $INFRA_ROOT/deployment/v3/external/object-store/minio/install.sh
+
+cd $INFRA_ROOT/deployment/v3/external/object-store/minio
+./install.sh
+
+# MinIO user: admin
+# MinIO pass: s64niLq9ls
+
+cd $INFRA_ROOT/deployment/v3/external/object-store
+./cred.sh
+
+# Choose option    1 (MinIO)
+# Pretext value    http://minio.minio.svc.cluster.local:9000
+
