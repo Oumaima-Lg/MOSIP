@@ -327,3 +327,48 @@ cd $INFRA_ROOT/deployment/v3/external/object-store
 # Choose option    1 (MinIO)
 # Pretext value    http://minio.minio.svc.cluster.local:9000
 
+sed -i 's/tag: 1.0.3/tag: 1.5.2/' \
+  $INFRA_ROOT/deployment/v3/external/antivirus/clamav/values.yaml
+
+cd $INFRA_ROOT/deployment/v3/external/antivirus/clamav
+./install.sh
+
+cd $INFRA_ROOT/deployment/v3/external/activemq
+./install.sh
+
+# activemq password: bln3BPUqz0
+
+kubectl scale statefulset activemq-activemq-artemis-slave -n activemq --replicas=0
+kubectl delete pvc data-activemq-activemq-artemis-slave-0 -n activemq
+
+
+cd $INFRA_ROOT/deployment/v3/external/kafka
+./install.sh
+
+┌─────────────────────────────────────────────────────┐
+│              MOSIP External Services                │
+├─────────────────┬───────────────────────────────────┤
+│ Postgres super  │ ORJALg59ID                        │
+│ Postgres app    │ mosip123                          │
+├─────────────────┼───────────────────────────────────┤
+│ Keycloak admin  │ admin / 2evBAeKQkP                │
+├─────────────────┼───────────────────────────────────┤
+│ MinIO           │ admin / s64niLq9ls                │
+├─────────────────┼───────────────────────────────────┤
+│ Kafka           │ kafka.kafka.svc.cluster.local:9092│
+└─────────────────┴───────────────────────────────────┘
+
+
+ssh mosip@172.19.34.65
+docker run -d \
+  --name pgadmin \
+  --restart unless-stopped \
+  -e PGADMIN_DEFAULT_EMAIL=admin@mosip.net \
+  -e PGADMIN_DEFAULT_PASSWORD=admin123 \
+  -p 5050:80 \
+  dpage/pgadmin4
+# open : http://172.19.34.65:5050
+Host       172.19.34.65
+Port       5432
+Username   postgres
+Password   ORJALg59ID
