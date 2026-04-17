@@ -244,15 +244,21 @@ cd $K8_ROOT/utils/httpbin
 curl -k https://api.sandbox.xyz.net/httpbin/get?show_env=true
 curl -k https://api-internal.sandbox.xyz.net/httpbin/get?show_env=true
 
+# Troubleshooting Nginx
+ssh mosip@172.19.34.65
+sudo systemctl status nginx
+sudo systemctl restart nginx
+sudo systemctl status nginx
+exit
 
-
-
-----------------------------------------------------------------------------------------------------------> 11. 
+----------------------------------------------------------------------------------------------------------> 11. External Dependencies Installation (WSL)
+--------------------> Postgres
 cd $INFRA_ROOT/deployment/v3/external/postgres
 ./install.sh
 
 # Current Postgres password: ORJALg59ID
 
+--------------------> Postgres DB Initialization
 sed -i 's/dbuserPassword: ""/dbuserPassword: "mosip123"/' \
   $INFRA_ROOT/deployment/v3/external/postgres/init_values.yaml
 
@@ -275,6 +281,37 @@ cd $INFRA_ROOT/deployment/v3/external/postgres
 │ Port            │ 5432                  │
 └─────────────────┴───────────────────────┘
 
+-- Add slots for next 30 days for all registration centers
+kubectl exec -it -n postgres postgres-postgresql-0 -- psql -U postgres -d mosip_prereg
+
+INSERT INTO prereg.reg_available_slot 
+(regcntr_id, availability_date, slot_from_time, slot_to_time, available_kiosks, cr_by, cr_dtimes, is_deleted)
+SELECT 
+  rc.regcntr_id,
+  CURRENT_DATE + i,
+  slots.slot_from_time,
+  slots.slot_to_time,
+  slots.available_kiosks,
+  'admin',
+  NOW(),
+  false
+FROM 
+  (SELECT DISTINCT regcntr_id FROM prereg.reg_available_slot) AS rc,
+  (SELECT DISTINCT slot_from_time, slot_to_time, available_kiosks FROM prereg.reg_available_slot) AS slots,
+  generate_series(1, 30) AS i
+ON CONFLICT DO NOTHING;
+
+-- Verify - should show dates from today to 30 days ahead
+SELECT availability_date, COUNT(*) as slot_count FROM prereg.reg_available_slot 
+GROUP BY availability_date ORDER BY availability_date DESC LIMIT 35;
+
+-- Count total slots
+SELECT COUNT(*) as total_slots FROM prereg.reg_available_slot;
+
+-- Exit
+\q
+
+--------------------> Keycloak
 sed -i 's/serviceDiscovery:/serviceDiscovery:\n  #disabled for single replica/' \
   $INFRA_ROOT/deployment/v3/external/iam/values.yaml
 
@@ -293,6 +330,7 @@ cd $INFRA_ROOT/deployment/v3/external/iam
 │ Keycloak URL    │ https://iam.sandbox.xyz.net  │
 └─────────────────┴──────────────────────────────┘
 
+--------------------> Keycloak-init
 ssh mosip@172.19.34.65
 sudo sed -i 's/upstream myInternalIngressUpstream {/upstream myInternalIngressUpstream {/' /etc/nginx/nginx.conf
 sudo sed -i '/myInternalIngressUpstream/{n;s/server 172.19.34.65:30080/server 172.19.34.65:31080/}' /etc/nginx/nginx.conf
@@ -309,9 +347,11 @@ cd $INFRA_ROOT/deployment/v3/external/iam
 # authentication     → false
 # SSL                → false
 
+--------------------> SoftHSM
 cd $INFRA_ROOT/deployment/v3/external/hsm/softhsm
 ./install.sh
 
+--------------------> MinIO Object Store
 sed -i 's/helm -n minio install minio mosip\/minio --version 10.1.6/helm -n minio install minio mosip\/minio --version 10.1.6 -f values.yaml/' \
   $INFRA_ROOT/deployment/v3/external/object-store/minio/install.sh
 
@@ -319,20 +359,22 @@ cd $INFRA_ROOT/deployment/v3/external/object-store/minio
 ./install.sh
 
 # MinIO user: admin
-# MinIO pass: s64niLq9ls
+# MinIO pass: v11N8Ifv7A
 
 cd $INFRA_ROOT/deployment/v3/external/object-store
 ./cred.sh
 
 # Choose option    1 (MinIO)
-# Pretext value    http://minio.minio.svc.cluster.local:9000
+# Pretext value    skip (Don't put: http://minio.minio.svc.cluster.local:9000)
 
+--------------------> ClamAV Antivirus
 sed -i 's/tag: 1.0.3/tag: 1.5.2/' \
   $INFRA_ROOT/deployment/v3/external/antivirus/clamav/values.yaml
 
 cd $INFRA_ROOT/deployment/v3/external/antivirus/clamav
 ./install.sh
 
+--------------------> ActiveMQ
 cd $INFRA_ROOT/deployment/v3/external/activemq
 ./install.sh
 
@@ -341,7 +383,7 @@ cd $INFRA_ROOT/deployment/v3/external/activemq
 kubectl scale statefulset activemq-activemq-artemis-slave -n activemq --replicas=0
 kubectl delete pvc data-activemq-activemq-artemis-slave-0 -n activemq
 
-
+--------------------> Kafka
 cd $INFRA_ROOT/deployment/v3/external/kafka
 ./install.sh
 
@@ -358,8 +400,7 @@ cd $INFRA_ROOT/deployment/v3/external/kafka
 │ Kafka           │ kafka.kafka.svc.cluster.local:9092│
 └─────────────────┴───────────────────────────────────┘
 
-
-ssh mosip@172.19.34.65
+--------------------> PgAdmin
 docker run -d \
   --name pgadmin \
   --restart unless-stopped \
@@ -367,8 +408,339 @@ docker run -d \
   -e PGADMIN_DEFAULT_PASSWORD=admin123 \
   -p 5050:80 \
   dpage/pgadmin4
-# open : http://172.19.34.65:5050
-Host       172.19.34.65
-Port       5432
-Username   postgres
-Password   ORJALg59ID
+# open : http://localhost:5050/
+# In WSL terminal
+hostname -I
+# 172.24.175.246
+Host name/address: <YOUR-WSL-IP> (from above)
+Port: 5432
+Username: postgres
+Password: ORJALg59ID
+Save password: ✅
+
+----------------------------------------------------------------------------------------------------------> 12. Config Server Update (WSL)
+# Update config server :
+Configuration change in case using Openssl wildcard ssl certificate. (Only advised in development env, not recommended for Production setup)
+Add/Update the below property in application-default.properties and comment on the below property in the *-default.properties file in the config repo.
+Copy
+mosip.iam.certs_endpoint=http://${keycloak.external.host}/auth/realms/mosip/protocol/openid-connect/certs
+Add/Update the below property in the esignet-default.properties file in the config repo.
+Copy
+spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://${keycloak.external.host}/auth/realms/mosip/protocol/openid-connect/certs
+
+# And in Values.yaml of config repo, I updated :
+gitRepo:
+  uri: http://172.18.37.25:8010/egov/version-clients/mx-id-mosip.git
+  version: develop
+  searchFolders: "k8s-setup/mosip-config"
+  private: true
+  username: "Olaghjibi"
+  token: "my-token"
+
+----------------------------------------------------------------------------------------------------------> 13. MOSIP MODULE DEPLOYMENT (WSL)
+--------------------> Conf Secrets
+cd $INFRA_ROOT/deployment/v3/mosip/conf-secrets
+./install.sh
+
+# Create a dummy captcha secret, Since we're skipping captcha (no real domain/SSL), create a placeholder so copy_secrets.sh doesn't fail:
+# Create captcha namespace
+    kubectl create ns captcha
+# Create dummy captcha secret
+    kubectl -n captcha create secret generic mosip-captcha \
+    --from-literal=mosip-captcha-required=false \
+    --from-literal=google-recaptcha-site-key=dummy \
+    --from-literal=google-recaptcha-secret-key=dummy
+# Verify
+    kubectl get secret mosip-captcha -n captcha
+
+--------------------> Config Server
+# There's a typo in the global configmap: mosip-singup-host: signup.sandbox.xyz.net   ← typo "singup" But config-server expects: mosip-signup-host   ← correct spelling. Also the captcha secret is missing the correct keys. Let's fix both.
+Fix 1 — Add missing key to global configmap
+    kubectl patch configmap global -n default --type merge -p '{"data":{"mosip-signup-host":"signup.sandbox.xyz.net"}}'
+# Verify
+    kubectl get configmap global -n default -o jsonpath='{.data.mosip-signup-host}'
+# Delete old dummy secret and recreate with correct keys
+    kubectl delete secret mosip-captcha -n captcha
+    kubectl -n captcha create secret generic mosip-captcha \
+    --from-literal=prereg-captcha-site-key=dummy \
+    --from-literal=prereg-captcha-secret-key=dummy \
+    --from-literal=resident-captcha-site-key=dummy \
+    --from-literal=resident-captcha-secret-key=dummy
+# Verify
+    kubectl get secret mosip-captcha -n captcha -o jsonpath='{.data}' | python3 -m json.tool
+
+cd $INFRA_ROOT/deployment/v3/mosip/config-server
+./install.sh
+
+--------------------> Artifactory
+cd $INFRA_ROOT/deployment/v3/mosip/artifactory
+./install.sh
+
+--------------------> Kernel
+# Step-by-Step Manual Execution
+NS=kernel
+CHART_VERSION=12.0.1
+ENABLE_INSECURE='--set enable_insecure=true'
+OVERRIDE=~/kernel-values-override.yaml
+
+kubectl create ns $NS
+kubectl label ns $NS istio-injection=enabled --overwrite
+helm repo update
+
+# 2. Copy configmaps
+cd $INFRA_ROOT/deployment/v3/mosip/kernel
+sed -i 's/\r$//' copy_cm.sh
+./copy_cm.sh
+
+# 3. authmanager — wait until Running before next
+helm -n $NS install authmanager mosip/authmanager \
+  --version $CHART_VERSION $ENABLE_INSECURE -f $OVERRIDE
+kubectl rollout status deployment/authmanager -n $NS --timeout=300s
+kubectl get pods -n $NS
+
+# 4. auditmanager
+helm -n $NS install auditmanager mosip/auditmanager \
+  --version $CHART_VERSION $ENABLE_INSECURE -f $OVERRIDE
+kubectl rollout status deployment/auditmanager -n $NS --timeout=300s
+kubectl get pods -n $NS
+
+# 5. otpmanager
+helm -n $NS install otpmanager mosip/otpmanager \
+  --version $CHART_VERSION $ENABLE_INSECURE -f $OVERRIDE
+kubectl rollout status deployment/otpmanager -n $NS --timeout=300s
+kubectl get pods -n $NS
+
+# 6. pridgenerator
+helm -n $NS install pridgenerator mosip/pridgenerator \
+  --version $CHART_VERSION $ENABLE_INSECURE -f $OVERRIDE
+
+# 7. masterdata
+ADMIN_HOST=$(kubectl get cm global -o jsonpath={.data.mosip-admin-host})
+helm -n $NS install masterdata mosip/masterdata \
+  --set istio.corsPolicy.allowOrigins[0].exact=https://$ADMIN_HOST \
+  --version $CHART_VERSION $ENABLE_INSECURE -f $OVERRIDE
+kubectl rollout status deployment/masterdata -n $NS --timeout=300s
+kubectl get pods -n $NS
+
+# 8. syncdata
+helm -n $NS install syncdata mosip/syncdata \
+  --version $CHART_VERSION $ENABLE_INSECURE -f $OVERRIDE
+kubectl rollout status deployment/syncdata -n $NS --timeout=300s
+kubectl get pods -n $NS
+
+# 9. notifier
+helm -n $NS install notifier mosip/notifier \
+  --version $CHART_VERSION $ENABLE_INSECURE -f $OVERRIDE
+kubectl rollout status deployment/notifier -n $NS --timeout=300s
+kubectl get pods -n $NS
+
+--------------------> Masterdata-loader
+cd $INFRA_ROOT/deployment/v3/mosip/masterdata-loader
+./install.sh
+
+--------------------> Prereg
+NS=prereg
+CHART_VERSION=12.0.1
+
+# Create namespace (istio DISABLED for prereg as per install.sh)
+kubectl create ns $NS
+kubectl label ns $NS istio-injection=disabled --overwrite
+helm repo update
+
+# Copy configmaps
+cd $INFRA_ROOT/deployment/v3/mosip/prereg
+sed -i 's/\r$//' copy_cm.sh
+./copy_cm.sh
+
+# Get hosts
+API_HOST=$(kubectl get cm global -o jsonpath={.data.mosip-api-host})
+PREREG_HOST=$(kubectl get cm global -o jsonpath={.data.mosip-prereg-host})
+echo "API: $API_HOST | PREREG: $PREREG_HOST"
+
+helm -n $NS install prereg-gateway mosip/prereg-gateway \
+  --set istio.hosts[0]=$PREREG_HOST \
+  --version $CHART_VERSION \
+  -f ~/prereg-gateway-override.yaml
+
+helm -n $NS install prereg-application mosip/prereg-application \
+  --version $CHART_VERSION \
+  -f ~/prereg-application-override.yaml
+
+helm -n $NS install prereg-booking mosip/prereg-booking \
+  --version $CHART_VERSION \
+  -f ~/prereg-booking-override.yaml
+
+helm -n $NS install prereg-datasync mosip/prereg-datasync \
+  --version $CHART_VERSION \
+  -f ~/prereg-datasync-override.yaml
+
+helm -n $NS install prereg-batchjob mosip/prereg-batchjob \
+  --version $CHART_VERSION \
+  -f ~/prereg-batchjob-override.yaml
+
+helm -n $NS install prereg-ui mosip/prereg-ui \
+  --set prereg.apiHost=$PREREG_HOST \
+  --version $CHART_VERSION \
+  -f ~/prereg-ui-override.yaml
+
+kubectl apply -n $NS -f rate-control-envoyfilter.yaml
+
+# Fix — Change prereg-gateway selector
+kubectl edit gateway prereg-gateway -n prereg
+# Change this:
+selector:
+  istio: ingressgateway
+# To this:
+selector:
+  istio: ingressgateway-internal
+
+--------------------> Admin
+NS=admin
+CHART_VERSION=12.0.1
+
+kubectl create ns $NS
+kubectl label ns $NS istio-injection=enabled --overwrite
+helm repo update
+
+cd $INFRA_ROOT/deployment/v3/mosip/admin
+sed -i 's/\r$//' copy_cm.sh
+./copy_cm.sh
+
+API_HOST=$(kubectl get cm global -o jsonpath={.data.mosip-api-internal-host})
+ADMIN_HOST=$(kubectl get cm global -o jsonpath={.data.mosip-admin-host})
+
+# Admin proxy (no helm, just kubectl)
+kubectl -n $NS apply -f admin-proxy.yaml
+
+# Hotlist
+helm -n $NS install admin-hotlist mosip/admin-hotlist \
+  --version $CHART_VERSION \
+  -f ~/admin-hotlist-override.yaml
+
+# Admin service
+helm -n $NS install admin-service mosip/admin-service \
+  --set istio.corsPolicy.allowOrigins[0].prefix=https://$ADMIN_HOST \
+  --version $CHART_VERSION \
+  -f ~/admin-service-override.yaml
+
+# Admin UI
+helm -n $NS install admin-ui mosip/admin-ui \
+  --set admin.apiUrl=https://$API_HOST/v1/ \
+  --set istio.hosts[0]=$ADMIN_HOST \
+  --version $CHART_VERSION \
+  -f ~/admin-ui-override.yaml
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------> 
+# Scaling down services to free up resources
+
+kubectl scale deployment config-server -n config-server --replicas=1
+
+kubectl scale statefulset kafka -n kafka --replicas=0 ; \
+kubectl scale statefulset kafka-zookeeper -n kafka --replicas=0 ; \
+kubectl scale statefulset activemq-activemq-artemis-master -n activemq --replicas=0 ; \
+
+kubectl scale deployment clamav -n clamav --replicas=0
+kubectl scale statefulset clamav -n clamav --replicas=0
+
+kubectl scale deployment softhsm-ida -n softhsm --replicas=1
+kubectl scale deployment softhsm-kernel -n softhsm --replicas=1
+kubectl scale deployment keymanager -n keymanager --replicas=1
+
+
+kubectl scale deployment minio -n minio --replicas=0
+
+kubectl scale deployment artifactory -n artifactory --replicas=1
+
+kubectl scale deployment authmanager -n kernel --replicas=1
+kubectl scale deployment auditmanager -n kernel --replicas=1
+# kubectl scale deployment idgenerator -n kernel --replicas=0
+kubectl scale deployment masterdata -n kernel --replicas=1
+kubectl scale deployment otpmanager -n kernel --replicas=0
+kubectl scale deployment pridgenerator -n kernel --replicas=0
+# kubectl scale deployment ridgenerator -n kernel --replicas=0
+kubectl scale deployment syncdata -n kernel --replicas=1
+kubectl scale deployment notifier -n kernel --replicas=0
+
+
+kubectl scale deployment prereg-application -n prereg --replicas=0
+kubectl scale deployment prereg-batchjob -n prereg --replicas=0
+kubectl scale deployment prereg-booking -n prereg --replicas=0
+kubectl scale deployment prereg-datasync -n prereg --replicas=0
+kubectl scale deployment prereg-ui -n prereg --replicas=0
+
+kubectl scale deployment admin-proxy -n admin --replicas=1
+kubectl scale deployment admin-hotlist -n admin --replicas=1
+kubectl scale deployment admin-service -n admin --replicas=1
+kubectl scale deployment admin-ui -n admin --replicas=1
+
+
+
+
+# Check resource usage to confirm services are scaled down
+kubectl top pods -A --sort-by=memory 
+
+
+
+
+
+https://iam.sandbox.xyz.net/auth
+https://prereg.sandbox.xyz.net/pre-registration-ui/#/eng
+https://minio.sandbox.xyz.net/
+
+
+
+
+
+Postgres
+Keycloak
+SoftHSM
+MinIO Object store
+ClamAV Antivirus
+ActiveMQ
+Kafka
+BioSDK Server
+ABIS
+MSG Gateway
+Docker Secrets
+Captcha
+Landing page
+
+
+Conf secrets
+Config Server
+Artifactory
+Keymanager
+WebSub
+Mock-SMTP
+Kernel : authmanager auditmanager idgenerator masterdata otpmanager pridgenerator ridgenerator syncdata notifier
+Masterdata-loader
+Mock-biosdk
+Packetmanager
+Datashare
+Pre-reg : prereg-gateway prereg-captcha prereg-application prereg-booking prereg-datasync prereg-batchjob prereg-ui
+Idrepo
+Partner Management Services
+Mock ABIS
+Mock-mv
+Registration Processor
+Admin : admin-proxy admin-hotlist admin-service admin-ui
+
+
+
+
+
+
+
